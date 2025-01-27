@@ -3,9 +3,10 @@ use std::sync::Arc;
 use pollster::block_on;
 use wgpu::{
     Backends, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Features,
-    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, PowerPreference, PresentMode, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
-    SurfaceConfiguration, SurfaceError, TextureFormat, TextureUsages, TextureViewDescriptor,
+    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations, PowerPreference,
+    PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions,
+    StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureFormat, TextureUsages,
+    TextureViewDescriptor,
 };
 use winit::{
     application::ApplicationHandler,
@@ -14,9 +15,9 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
+// TODO: checkout TextureBlitter
 struct State {
     window: Arc<Window>,
-    instance: Instance,
     surface: Surface<'static>,
     device: Device,
     queue: Queue,
@@ -62,7 +63,7 @@ impl State {
                 format: TextureFormat::Bgra8UnormSrgb,
                 width: window_size.width,
                 height: window_size.height,
-                present_mode: PresentMode::Immediate,
+                present_mode: PresentMode::Mailbox,
                 alpha_mode: CompositeAlphaMode::Auto,
                 view_formats: vec![],
                 desired_maximum_frame_latency: 2,
@@ -71,7 +72,6 @@ impl State {
 
         Self {
             window,
-            instance,
             surface,
             device,
             queue,
@@ -88,27 +88,25 @@ impl State {
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        {
-            let _render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-        }
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
