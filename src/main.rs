@@ -125,7 +125,11 @@ struct App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &event_loop::ActiveEventLoop) {
         let window = event_loop
-            .create_window(WindowAttributes::default().with_resizable(false))
+            .create_window(
+                WindowAttributes::default()
+                    .with_resizable(false)
+                    .with_title("raytracer"),
+            )
             .unwrap();
 
         self.state = Some(block_on(State::new(Arc::new(window))));
