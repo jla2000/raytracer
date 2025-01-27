@@ -15,6 +15,7 @@
           rustc
         ];
         buildInputs = with pkgs; [
+          vulkan-loader
           libGL
           libxkbcommon
           xorg.libX11
