@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    Backends, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor,
-    Features, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations,
-    PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
-    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureFormat,
-    TextureUsages, TextureViewDescriptor,
+    include_wgsl, Backends, Color, CommandEncoderDescriptor, CompositeAlphaMode, ComputePipeline,
+    Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints,
+    Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration,
+    SurfaceError, TextureFormat, TextureUsages, TextureViewDescriptor,
 };
 use winit::{
     application::ApplicationHandler,
@@ -69,6 +69,8 @@ impl State {
                 desired_maximum_frame_latency: 2,
             },
         );
+
+        let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
 
         Self {
             window,
