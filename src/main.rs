@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    Backends, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Features,
-    Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations, PowerPreference,
-    PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions,
-    StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    Backends, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor,
+    Features, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations,
+    PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureFormat,
+    TextureUsages, TextureViewDescriptor,
 };
 use winit::{
     application::ApplicationHandler,
@@ -94,7 +94,7 @@ impl State {
                 view: &view,
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Clear(wgpu::Color {
+                    load: LoadOp::Clear(Color {
                         r: 0.1,
                         g: 0.2,
                         b: 0.3,
