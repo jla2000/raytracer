@@ -2,11 +2,13 @@ use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    include_wgsl, Backends, Color, CommandEncoderDescriptor, CompositeAlphaMode, ComputePipeline,
+    include_wgsl, Backends, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Color,
+    CommandEncoderDescriptor, CompositeAlphaMode, ComputePipeline, ComputePipelineDescriptor,
     Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints,
-    Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration,
-    SurfaceError, TextureFormat, TextureUsages, TextureViewDescriptor,
+    Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue,
+    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
+    StorageTextureAccess, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureFormat,
+    TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 use winit::{
     application::ApplicationHandler,
@@ -21,6 +23,7 @@ struct State {
     surface: Surface<'static>,
     device: Device,
     queue: Queue,
+    pipeline: ComputePipeline,
 }
 
 impl State {
@@ -70,13 +73,43 @@ impl State {
             },
         );
 
-        let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
+        let shader_module = device.create_shader_module(include_wgsl!("shader.wgsl"));
+
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::StorageTexture {
+                    access: StorageTextureAccess::WriteOnly,
+                    format: TextureFormat::Bgra8UnormSrgb,
+                    view_dimension: TextureViewDimension::D1,
+                },
+                count: None,
+            }],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &shader_module,
+            entry_point: Some("render"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
 
         Self {
             window,
             surface,
             device,
             queue,
+            pipeline,
         }
     }
 
