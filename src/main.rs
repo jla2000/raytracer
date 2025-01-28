@@ -8,7 +8,6 @@ use winit::{
     application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, event_loop::{self, ControlFlow, EventLoop}, window::{Window, WindowAttributes}
 };
 
-// TODO: checkout TextureBlitter
 struct State {
     window: Arc<Window>,
     surface: Surface<'static>,
@@ -209,13 +208,12 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.state {
-                    let now = Instant::now();
-
                     state.render().unwrap();
                     state.window.request_redraw();
 
                     self.num_frames += 1;
 
+                    let now = Instant::now();
                     if now - self.last_frame > Duration::from_secs(1) {
                         println!("Fps: {}", self.num_frames);
                         self.last_frame = now;
