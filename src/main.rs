@@ -1,11 +1,25 @@
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use pollster::block_on;
 use wgpu::{
-    include_wgsl, util::TextureBlitter, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, CommandEncoderDescriptor, CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension
+    include_wgsl, util::TextureBlitter, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
+    CommandEncoderDescriptor, CompositeAlphaMode, ComputePassDescriptor, ComputePipeline,
+    ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
+    InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
+    PresentMode, Queue, RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface,
+    SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 use winit::{
-    application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, event_loop::{self, ControlFlow, EventLoop}, window::{Window, WindowAttributes}
+    application::ApplicationHandler,
+    dpi::PhysicalSize,
+    event::WindowEvent,
+    event_loop::{self, ControlFlow, EventLoop},
+    window::{Window, WindowAttributes},
 };
 
 struct State {
@@ -53,11 +67,12 @@ impl State {
 
         let window_size = window.inner_size();
 
+        let surface_texture_format = TextureFormat::Bgra8UnormSrgb;
         surface.configure(
             &device,
             &SurfaceConfiguration {
                 usage: TextureUsages::RENDER_ATTACHMENT,
-                format: TextureFormat::Bgra8UnormSrgb,
+                format: surface_texture_format,
                 width: window_size.width,
                 height: window_size.height,
                 present_mode: PresentMode::Mailbox,
@@ -69,6 +84,7 @@ impl State {
 
         let shader_module = device.create_shader_module(include_wgsl!("render.wgsl"));
 
+        let render_texture_format = TextureFormat::Rgba32Float;
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
             entries: &[BindGroupLayoutEntry {
@@ -76,7 +92,7 @@ impl State {
                 visibility: ShaderStages::COMPUTE,
                 ty: BindingType::StorageTexture {
                     access: StorageTextureAccess::WriteOnly,
-                    format: TextureFormat::Rgba32Float,
+                    format: render_texture_format,
                     view_dimension: TextureViewDimension::D2,
                 },
                 count: None,
@@ -108,7 +124,7 @@ impl State {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba32Float,
+            format: render_texture_format,
             usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
@@ -124,7 +140,7 @@ impl State {
             }],
         });
 
-        let blitter = TextureBlitter::new(&device, TextureFormat::Bgra8UnormSrgb);
+        let blitter = TextureBlitter::new(&device, surface_texture_format);
 
         Self {
             window,
@@ -135,7 +151,7 @@ impl State {
             render_texture_view,
             bind_group,
             blitter,
-            window_size
+            window_size,
         }
     }
 
@@ -156,12 +172,21 @@ impl State {
 
         compute_pass.set_pipeline(&self.pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.dispatch_workgroups(self.window_size.width / 10, self.window_size.height / 10, 1);
+        compute_pass.dispatch_workgroups(
+            self.window_size.width / 10,
+            self.window_size.height / 10,
+            1,
+        );
 
         drop(compute_pass);
 
-        self.blitter.copy(&self.device, &mut encoder, &self.render_texture_view, &surface_view);
-        
+        self.blitter.copy(
+            &self.device,
+            &mut encoder,
+            &self.render_texture_view,
+            &surface_view,
+        );
+
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
