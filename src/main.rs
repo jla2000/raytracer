@@ -2,13 +2,15 @@ use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    include_wgsl, Backends, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Color,
+    include_wgsl, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color,
     CommandEncoderDescriptor, CompositeAlphaMode, ComputePipeline, ComputePipelineDescriptor,
-    Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints,
-    Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue,
+    Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, LoadOp,
+    MemoryHints, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue,
     RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
-    StorageTextureAccess, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureFormat,
-    TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    StorageTextureAccess, StoreOp, Surface, SurfaceConfiguration, SurfaceError, Texture,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
+    TextureViewDimension,
 };
 use winit::{
     application::ApplicationHandler,
@@ -24,6 +26,8 @@ struct State {
     device: Device,
     queue: Queue,
     pipeline: ComputePipeline,
+    texture: Texture,
+    bind_group: BindGroup,
 }
 
 impl State {
@@ -82,8 +86,8 @@ impl State {
                 visibility: ShaderStages::COMPUTE,
                 ty: BindingType::StorageTexture {
                     access: StorageTextureAccess::WriteOnly,
-                    format: TextureFormat::Bgra8UnormSrgb,
-                    view_dimension: TextureViewDimension::D1,
+                    format: TextureFormat::Rgba32Float,
+                    view_dimension: TextureViewDimension::D2,
                 },
                 count: None,
             }],
@@ -104,12 +108,40 @@ impl State {
             cache: None,
         });
 
+        let texture = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: window_size.width,
+                height: window_size.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba32Float,
+            usage: TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
+
+        let texture_view = texture.create_view(&TextureViewDescriptor::default());
+
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&texture_view),
+            }],
+        });
+
         Self {
             window,
             surface,
             device,
             queue,
             pipeline,
+            texture,
+            bind_group,
         }
     }
 
