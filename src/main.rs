@@ -2,13 +2,10 @@ use std::{sync::Arc, time::{Duration, Instant}};
 
 use pollster::block_on;
 use wgpu::{
-    include_wgsl, util::TextureBlitter, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color, CommandEncoderDescriptor, CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages, StorageTextureAccess, StoreOp, Surface, SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension
+    include_wgsl, util::TextureBlitter, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, CommandEncoderDescriptor, CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension
 };
 use winit::{
-    application::ApplicationHandler,
-    event::WindowEvent,
-    event_loop::{self, ControlFlow, EventLoop},
-    window::{Window, WindowAttributes},
+    application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, event_loop::{self, ControlFlow, EventLoop}, window::{Window, WindowAttributes}
 };
 
 // TODO: checkout TextureBlitter
@@ -18,10 +15,10 @@ struct State {
     device: Device,
     queue: Queue,
     pipeline: ComputePipeline,
-    texture: Texture,
-    texture_view: TextureView,
+    render_texture_view: TextureView,
     bind_group: BindGroup,
     blitter: TextureBlitter,
+    window_size: PhysicalSize<u32>,
 }
 
 impl State {
@@ -71,7 +68,7 @@ impl State {
             },
         );
 
-        let shader_module = device.create_shader_module(include_wgsl!("shader.wgsl"));
+        let shader_module = device.create_shader_module(include_wgsl!("render.wgsl"));
 
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
@@ -117,14 +114,14 @@ impl State {
             view_formats: &[],
         });
 
-        let texture_view = texture.create_view(&TextureViewDescriptor::default());
+        let render_texture_view = texture.create_view(&TextureViewDescriptor::default());
 
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: BindingResource::TextureView(&texture_view),
+                resource: BindingResource::TextureView(&render_texture_view),
             }],
         });
 
@@ -136,16 +133,16 @@ impl State {
             device,
             queue,
             pipeline,
-            texture,
-            texture_view,
+            render_texture_view,
             bind_group,
             blitter,
+            window_size
         }
     }
 
     fn render(&mut self) -> Result<(), SurfaceError> {
         let output = self.surface.get_current_texture()?;
-        let view = output
+        let surface_view = output
             .texture
             .create_view(&TextureViewDescriptor::default());
 
@@ -160,11 +157,11 @@ impl State {
 
         compute_pass.set_pipeline(&self.pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.dispatch_workgroups(16, 16, 1);
+        compute_pass.dispatch_workgroups(self.window_size.width / 10, self.window_size.height / 10, 1);
 
         drop(compute_pass);
 
-        self.blitter.copy(&self.device, &mut encoder, &self.texture_view, &view);
+        self.blitter.copy(&self.device, &mut encoder, &self.render_texture_view, &surface_view);
         
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
