@@ -18,6 +18,7 @@
           vulkan-loader
           libGL
           libxkbcommon
+          wayland
           xorg.libX11
           xorg.libXcursor
           xorg.libXi
