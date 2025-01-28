@@ -2,15 +2,7 @@ use std::sync::Arc;
 
 use pollster::block_on;
 use wgpu::{
-    include_wgsl, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color,
-    CommandEncoderDescriptor, CompositeAlphaMode, ComputePipeline, ComputePipelineDescriptor,
-    Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, LoadOp,
-    MemoryHints, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
-    StorageTextureAccess, StoreOp, Surface, SurfaceConfiguration, SurfaceError, Texture,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension,
+    include_wgsl, util::TextureBlitter, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Color, CommandEncoderDescriptor, CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, LoadOp, MemoryHints, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages, StorageTextureAccess, StoreOp, Surface, SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension
 };
 use winit::{
     application::ApplicationHandler,
@@ -27,7 +19,9 @@ struct State {
     queue: Queue,
     pipeline: ComputePipeline,
     texture: Texture,
+    texture_view: TextureView,
     bind_group: BindGroup,
+    blitter: TextureBlitter,
 }
 
 impl State {
@@ -119,7 +113,7 @@ impl State {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba32Float,
-            usage: TextureUsages::STORAGE_BINDING,
+            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
 
@@ -134,6 +128,8 @@ impl State {
             }],
         });
 
+        let blitter = TextureBlitter::new(&device, TextureFormat::Bgra8UnormSrgb);
+
         Self {
             window,
             surface,
@@ -141,7 +137,9 @@ impl State {
             queue,
             pipeline,
             texture,
+            texture_view,
             bind_group,
+            blitter,
         }
     }
 
@@ -155,26 +153,19 @@ impl State {
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        encoder.begin_render_pass(&RenderPassDescriptor {
+        let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: None,
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
             timestamp_writes: None,
         });
 
+        compute_pass.set_pipeline(&self.pipeline);
+        compute_pass.set_bind_group(0, &self.bind_group, &[]);
+        compute_pass.dispatch_workgroups(16, 16, 1);
+
+        drop(compute_pass);
+
+        self.blitter.copy(&self.device, &mut encoder, &self.texture_view, &view);
+        
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
