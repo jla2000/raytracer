@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::{Duration, Instant}};
 
 use pollster::block_on;
 use wgpu::{
@@ -173,9 +173,20 @@ impl State {
     }
 }
 
-#[derive(Default)]
 struct App {
     state: Option<State>,
+    last_frame: Instant,
+    num_frames: usize,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            state: None,
+            last_frame: Instant::now(),
+            num_frames: 0,
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -201,8 +212,18 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.state {
+                    let now = Instant::now();
+
                     state.render().unwrap();
                     state.window.request_redraw();
+
+                    self.num_frames += 1;
+
+                    if now - self.last_frame > Duration::from_secs(1) {
+                        println!("Fps: {}", self.num_frames);
+                        self.last_frame = now;
+                        self.num_frames = 0;
+                    }
                 }
             }
             _ => {}
