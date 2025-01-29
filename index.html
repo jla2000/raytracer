@@ -6,9 +6,10 @@
     <title>raytracer</title>
   </head>
   <body>
+    <div id="render-surface"></div>
     <script type="module">
-    import init from "./pkg/raytracer.js";
-    init().then(() => console.log("WASM loaded."));
+      import init from "./pkg/raytracer.js";
+      init().then(() => console.log("WASM loaded."));
     </script>
   </body>
 </html>

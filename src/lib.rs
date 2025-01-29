@@ -1,12 +1,7 @@
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
-use pollster::block_on;
 use wgpu::{
     include_wgsl, util::TextureBlitter, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
@@ -22,6 +17,7 @@ use winit::{
     dpi::PhysicalSize,
     event::WindowEvent,
     event_loop::{self, ControlFlow, EventLoop},
+    platform::web::WindowExtWebSys,
     window::{Window, WindowAttributes},
 };
 
@@ -70,7 +66,13 @@ impl State {
 
         let window_size = window.inner_size();
 
-        let surface_texture_format = TextureFormat::Bgra8UnormSrgb;
+        let surface_texture_format = surface
+            .get_capabilities(&adapter)
+            .formats
+            .first()
+            .copied()
+            .unwrap();
+
         surface.configure(
             &device,
             &SurfaceConfiguration {
@@ -78,7 +80,7 @@ impl State {
                 format: surface_texture_format,
                 width: window_size.width,
                 height: window_size.height,
-                present_mode: PresentMode::Mailbox,
+                present_mode: PresentMode::Fifo,
                 alpha_mode: CompositeAlphaMode::Auto,
                 view_formats: vec![],
                 desired_maximum_frame_latency: 2,
@@ -198,33 +200,11 @@ impl State {
 }
 
 struct App {
-    state: Option<State>,
-    // last_frame: Instant,
-    num_frames: usize,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            state: None,
-            // last_frame: Instant::now(),
-            num_frames: 0,
-        }
-    }
+    state: State,
 }
 
 impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &event_loop::ActiveEventLoop) {
-        let window = event_loop
-            .create_window(
-                WindowAttributes::default()
-                    .with_resizable(false)
-                    .with_title("raytracer"),
-            )
-            .unwrap();
-
-        self.state = Some(block_on(State::new(Arc::new(window))));
-    }
+    fn resumed(&mut self, _event_loop: &event_loop::ActiveEventLoop) {}
 
     fn window_event(
         &mut self,
@@ -235,35 +215,49 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
-                if let Some(state) = &mut self.state {
-                    state.render().unwrap();
-                    state.window.request_redraw();
-
-                    self.num_frames += 1;
-
-                    // let now = Instant::now();
-                    // if now - self.last_frame > Duration::from_secs(1) {
-                    //     println!("Fps: {}", self.num_frames);
-                    //     self.last_frame = now;
-                    //     self.num_frames = 0;
-                    // }
-                }
+                self.state.render().unwrap();
+                self.state.window.request_redraw();
             }
             _ => {}
         }
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub fn wasm_main() {
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    console_log::init_with_level(log::Level::Info).expect("Failed to initialize logger");
+    wasm_bindgen_futures::spawn_local(run());
 }
 
-pub fn run() {
-    let event_loop = EventLoop::builder().build().unwrap();
+async fn run() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    console_log::init_with_level(log::Level::Info).expect("Failed to initialize logger");
 
+    let event_loop = EventLoop::builder().build().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(&mut App::default()).unwrap();
+
+    let window = event_loop
+        .create_window(
+            WindowAttributes::default()
+                .with_resizable(false)
+                .with_title("raytracer"),
+        )
+        .unwrap();
+
+    _ = window.request_inner_size(PhysicalSize::new(800, 600));
+
+    web_sys::window()
+        .and_then(|win| win.document())
+        .and_then(|doc| {
+            let dst = doc.get_element_by_id("render-surface")?;
+            let canvas = web_sys::Element::from(window.canvas()?);
+            dst.append_child(&canvas).ok()?;
+            Some(())
+        })
+        .expect("Couldn't append canvas to document body.");
+
+    event_loop
+        .run_app(&mut App {
+            state: State::new(Arc::new(window)).await,
+        })
+        .unwrap();
 }
