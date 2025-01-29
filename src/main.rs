@@ -1,5 +1,4 @@
 use std::{
-    default,
     sync::Arc,
     time::{Duration, Instant},
 };
