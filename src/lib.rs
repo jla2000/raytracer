@@ -243,8 +243,6 @@ async fn run() {
         )
         .unwrap();
 
-    _ = window.request_inner_size(PhysicalSize::new(800, 600));
-
     web_sys::window()
         .and_then(|win| win.document())
         .and_then(|doc| {
@@ -254,6 +252,8 @@ async fn run() {
             Some(())
         })
         .expect("Couldn't append canvas to document body.");
+
+    _ = window.request_inner_size(PhysicalSize::new(800, 600));
 
     event_loop
         .run_app(&mut App {
