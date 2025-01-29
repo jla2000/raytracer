@@ -1,5 +1,5 @@
 @group(0) @binding(0)
-var render_texture: texture_storage_2d<bgra8unorm, write>;
+var render_texture: texture_storage_2d<bgra8unorm, read_write>;
 
 @compute
 @workgroup_size(10, 10, 1)

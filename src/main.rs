@@ -11,9 +11,8 @@ use wgpu::{
     ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
     InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
     PresentMode, Queue, RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface,
-    SurfaceConfiguration, SurfaceError, TexelCopyTextureInfo, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
-    TextureViewDimension,
+    SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 use winit::{
     application::ApplicationHandler,
@@ -58,7 +57,8 @@ impl State {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    required_features: Features::BGRA8UNORM_STORAGE,
+                    required_features: Features::BGRA8UNORM_STORAGE
+                        | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     required_limits: Limits::default(),
                     memory_hints: MemoryHints::default(),
                 },
@@ -69,12 +69,12 @@ impl State {
 
         let window_size = window.inner_size();
 
-        let surface_texture_format = TextureFormat::Bgra8Unorm;
+        let texture_format = TextureFormat::Bgra8Unorm;
         surface.configure(
             &device,
             &SurfaceConfiguration {
                 usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST,
-                format: surface_texture_format,
+                format: texture_format,
                 width: window_size.width,
                 height: window_size.height,
                 present_mode: PresentMode::Immediate,
@@ -86,15 +86,14 @@ impl State {
 
         let shader_module = device.create_shader_module(include_wgsl!("render.wgsl"));
 
-        let render_texture_format = TextureFormat::Bgra8Unorm;
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
             entries: &[BindGroupLayoutEntry {
                 binding: 0,
                 visibility: ShaderStages::COMPUTE,
                 ty: BindingType::StorageTexture {
-                    access: StorageTextureAccess::WriteOnly,
-                    format: render_texture_format,
+                    access: StorageTextureAccess::ReadWrite,
+                    format: texture_format,
                     view_dimension: TextureViewDimension::D2,
                 },
                 count: None,
@@ -126,7 +125,7 @@ impl State {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: render_texture_format,
+            format: texture_format,
             usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
             view_formats: &[],
         });
@@ -142,7 +141,7 @@ impl State {
             }],
         });
 
-        let blitter = TextureBlitter::new(&device, surface_texture_format);
+        let blitter = TextureBlitter::new(&device, texture_format);
 
         Self {
             window,
@@ -183,13 +182,6 @@ impl State {
 
         drop(compute_pass);
 
-        // self.blitter.copy(
-        //     &self.device,
-        //     &mut encoder,
-        //     &self.render_texture_view,
-        //     &surface_view,
-        // );
-        //
         encoder.copy_texture_to_texture(
             self.render_texture.as_image_copy(),
             output.texture.as_image_copy(),
