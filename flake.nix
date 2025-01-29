@@ -13,6 +13,10 @@
         nativeBuildInputs = with pkgs; [
           cargo
           rustc
+          wasm-pack
+          wasm-bindgen-cli
+          binaryen
+          lld
         ];
         buildInputs = with pkgs; [
           vulkan-loader
