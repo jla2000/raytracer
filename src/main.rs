@@ -222,6 +222,7 @@ impl ApplicationHandler for App {
             .unwrap();
 
         self.state = Some(block_on(State::new(Arc::new(window))));
+        self.last_frame = Instant::now();
     }
 
     fn window_event(
