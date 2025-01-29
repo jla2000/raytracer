@@ -77,7 +77,7 @@ impl Renderer {
             },
         );
 
-        let shader_module = device.create_shader_module(include_wgsl!("render.wgsl"));
+        let shader_module = device.create_shader_module(include_wgsl!("shader.wgsl"));
 
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
