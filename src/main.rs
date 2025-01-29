@@ -11,8 +11,9 @@ use wgpu::{
     ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
     InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
     PresentMode, Queue, RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface,
-    SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
+    SurfaceConfiguration, SurfaceError, TexelCopyTextureInfo, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    TextureViewDimension,
 };
 use winit::{
     application::ApplicationHandler,
@@ -28,6 +29,7 @@ struct State {
     device: Device,
     queue: Queue,
     pipeline: ComputePipeline,
+    render_texture: Texture,
     render_texture_view: TextureView,
     bind_group: BindGroup,
     blitter: TextureBlitter,
@@ -45,7 +47,7 @@ impl State {
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::HighPerformance,
+                power_preference: PowerPreference::LowPower,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -56,7 +58,7 @@ impl State {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    required_features: Features::default(),
+                    required_features: Features::BGRA8UNORM_STORAGE,
                     required_limits: Limits::default(),
                     memory_hints: MemoryHints::default(),
                 },
@@ -67,15 +69,15 @@ impl State {
 
         let window_size = window.inner_size();
 
-        let surface_texture_format = TextureFormat::Bgra8UnormSrgb;
+        let surface_texture_format = TextureFormat::Bgra8Unorm;
         surface.configure(
             &device,
             &SurfaceConfiguration {
-                usage: TextureUsages::RENDER_ATTACHMENT,
+                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST,
                 format: surface_texture_format,
                 width: window_size.width,
                 height: window_size.height,
-                present_mode: PresentMode::Mailbox,
+                present_mode: PresentMode::Immediate,
                 alpha_mode: CompositeAlphaMode::Auto,
                 view_formats: vec![],
                 desired_maximum_frame_latency: 2,
@@ -84,7 +86,7 @@ impl State {
 
         let shader_module = device.create_shader_module(include_wgsl!("render.wgsl"));
 
-        let render_texture_format = TextureFormat::Rgba32Float;
+        let render_texture_format = TextureFormat::Bgra8Unorm;
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
             entries: &[BindGroupLayoutEntry {
@@ -114,7 +116,7 @@ impl State {
             cache: None,
         });
 
-        let texture = device.create_texture(&TextureDescriptor {
+        let render_texture = device.create_texture(&TextureDescriptor {
             label: None,
             size: Extent3d {
                 width: window_size.width,
@@ -125,11 +127,11 @@ impl State {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: render_texture_format,
-            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
+            usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
             view_formats: &[],
         });
 
-        let render_texture_view = texture.create_view(&TextureViewDescriptor::default());
+        let render_texture_view = render_texture.create_view(&TextureViewDescriptor::default());
 
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
@@ -148,6 +150,7 @@ impl State {
             device,
             queue,
             pipeline,
+            render_texture,
             render_texture_view,
             bind_group,
             blitter,
@@ -180,11 +183,17 @@ impl State {
 
         drop(compute_pass);
 
-        self.blitter.copy(
-            &self.device,
-            &mut encoder,
-            &self.render_texture_view,
-            &surface_view,
+        // self.blitter.copy(
+        //     &self.device,
+        //     &mut encoder,
+        //     &self.render_texture_view,
+        //     &surface_view,
+        // );
+        //
+        encoder.copy_texture_to_texture(
+            self.render_texture.as_image_copy(),
+            output.texture.as_image_copy(),
+            output.texture.size(),
         );
 
         self.queue.submit(std::iter::once(encoder.finish()));
