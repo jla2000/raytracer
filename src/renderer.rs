@@ -13,7 +13,6 @@ use wgpu::{
 use winit::{dpi::PhysicalSize, window::Window};
 
 pub struct Renderer {
-    window: Arc<Window>,
     surface: Surface<'static>,
     device: Device,
     queue: Queue,
@@ -136,7 +135,6 @@ impl Renderer {
         });
 
         Self {
-            window,
             surface,
             device,
             queue,

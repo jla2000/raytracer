@@ -1,4 +1,5 @@
 use std::{
+    default,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -14,18 +15,39 @@ use winit::{
 mod renderer;
 use renderer::*;
 
+#[derive(Default)]
 struct App {
     state: Option<(Arc<Window>, Renderer)>,
+    counter: FpsCounter,
+}
+
+struct FpsCounter {
     last_frame: Instant,
     num_frames: usize,
 }
 
-impl Default for App {
+impl Default for FpsCounter {
     fn default() -> Self {
         Self {
-            state: None,
-            last_frame: Instant::now(),
             num_frames: 0,
+            last_frame: Instant::now(),
+        }
+    }
+}
+
+impl FpsCounter {
+    pub fn get_fps(&mut self) -> Option<usize> {
+        let now = Instant::now();
+        self.num_frames += 1;
+
+        if self.last_frame - now > Duration::from_secs(1) {
+            let fps = self.num_frames;
+            self.num_frames = 0;
+            self.last_frame = now;
+
+            Some(fps)
+        } else {
+            None
         }
     }
 }
@@ -44,7 +66,6 @@ impl ApplicationHandler for App {
         );
 
         self.state = Some((window.clone(), pollster::block_on(Renderer::new(window))));
-        self.last_frame = Instant::now();
     }
 
     fn window_event(
@@ -60,13 +81,8 @@ impl ApplicationHandler for App {
                     renderer.render().unwrap();
                     window.request_redraw();
 
-                    self.num_frames += 1;
-
-                    let now = Instant::now();
-                    if now - self.last_frame > Duration::from_secs(1) {
-                        window.set_title(&format!("raytracer - FPS: {}", self.num_frames));
-                        self.last_frame = now;
-                        self.num_frames = 0;
+                    if let Some(fps) = self.counter.get_fps() {
+                        window.set_title(&format!("raytracer - FPS: {}", fps));
                     }
                 }
             }
