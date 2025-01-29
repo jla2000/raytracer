@@ -5,14 +5,14 @@ use std::{
 
 use pollster::block_on;
 use wgpu::{
-    include_wgsl, util::TextureBlitter, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
+    include_wgsl, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
     CommandEncoderDescriptor, CompositeAlphaMode, ComputePassDescriptor, ComputePipeline,
     ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
     InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
     PresentMode, Queue, RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface,
     SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 use winit::{
     application::ApplicationHandler,
@@ -29,9 +29,7 @@ struct State {
     queue: Queue,
     pipeline: ComputePipeline,
     render_texture: Texture,
-    render_texture_view: TextureView,
     bind_group: BindGroup,
-    blitter: TextureBlitter,
     window_size: PhysicalSize<u32>,
 }
 
@@ -147,8 +145,6 @@ impl State {
             }],
         });
 
-        let blitter = TextureBlitter::new(&device, texture_format);
-
         Self {
             window,
             surface,
@@ -156,18 +152,13 @@ impl State {
             queue,
             pipeline,
             render_texture,
-            render_texture_view,
             bind_group,
-            blitter,
             window_size,
         }
     }
 
     fn render(&mut self) -> Result<(), SurfaceError> {
-        let output = self.surface.get_current_texture()?;
-        let surface_view = output
-            .texture
-            .create_view(&TextureViewDescriptor::default());
+        let surface_texture = self.surface.get_current_texture()?;
 
         let mut encoder = self
             .device
@@ -190,12 +181,12 @@ impl State {
 
         encoder.copy_texture_to_texture(
             self.render_texture.as_image_copy(),
-            output.texture.as_image_copy(),
-            output.texture.size(),
+            surface_texture.texture.as_image_copy(),
+            surface_texture.texture.size(),
         );
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
+        surface_texture.present();
 
         Ok(())
     }
