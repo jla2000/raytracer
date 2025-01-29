@@ -53,6 +53,12 @@ impl State {
             .await
             .unwrap();
 
+        println!(
+            "INFO - Gpu: {}, Backend: {}",
+            adapter.get_info().name,
+            adapter.get_info().backend
+        );
+
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
@@ -242,7 +248,9 @@ impl ApplicationHandler for App {
 
                     let now = Instant::now();
                     if now - self.last_frame > Duration::from_secs(1) {
-                        println!("Fps: {}", self.num_frames);
+                        state
+                            .window
+                            .set_title(&format!("raytracer - FPS: {}", self.num_frames));
                         self.last_frame = now;
                         self.num_frames = 0;
                     }
@@ -269,7 +277,7 @@ fn main() {
         fn flush(&self) {}
     }
     log::set_boxed_logger(Box::new(Logger))
-        .map(|_| log::set_max_level(log::LevelFilter::Info))
+        .map(|_| log::set_max_level(log::LevelFilter::Warn))
         .unwrap();
 
     let event_loop = EventLoop::new().unwrap();
