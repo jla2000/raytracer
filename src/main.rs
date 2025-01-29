@@ -39,7 +39,7 @@ impl FpsCounter {
         let now = Instant::now();
         self.num_frames += 1;
 
-        if self.last_frame - now > Duration::from_secs(1) {
+        if now - self.last_frame > Duration::from_secs(1) {
             let fps = self.num_frames;
             self.num_frames = 0;
             self.last_frame = now;
