@@ -252,7 +252,23 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    env_logger::try_init().unwrap();
+    struct Logger;
+    impl log::Log for Logger {
+        fn enabled(&self, metadata: &log::Metadata) -> bool {
+            metadata.level() <= log::Level::Info
+        }
+
+        fn log(&self, record: &log::Record) {
+            if self.enabled(record.metadata()) {
+                println!("{} - {}", record.level(), record.args());
+            }
+        }
+
+        fn flush(&self) {}
+    }
+    log::set_boxed_logger(Box::new(Logger))
+        .map(|_| log::set_max_level(log::LevelFilter::Info))
+        .unwrap();
 
     let event_loop = EventLoop::new().unwrap();
 
