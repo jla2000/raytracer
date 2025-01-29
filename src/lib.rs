@@ -199,7 +199,7 @@ impl State {
 
 struct App {
     state: Option<State>,
-    last_frame: Instant,
+    // last_frame: Instant,
     num_frames: usize,
 }
 
@@ -207,7 +207,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             state: None,
-            last_frame: Instant::now(),
+            // last_frame: Instant::now(),
             num_frames: 0,
         }
     }
@@ -241,12 +241,12 @@ impl ApplicationHandler for App {
 
                     self.num_frames += 1;
 
-                    let now = Instant::now();
-                    if now - self.last_frame > Duration::from_secs(1) {
-                        println!("Fps: {}", self.num_frames);
-                        self.last_frame = now;
-                        self.num_frames = 0;
-                    }
+                    // let now = Instant::now();
+                    // if now - self.last_frame > Duration::from_secs(1) {
+                    //     println!("Fps: {}", self.num_frames);
+                    //     self.last_frame = now;
+                    //     self.num_frames = 0;
+                    // }
                 }
             }
             _ => {}
@@ -260,7 +260,9 @@ pub fn wasm_main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init_with_level(log::Level::Info).expect("Failed to initialize logger");
 
-    run();
+    log::info!("Starting raytracer...");
+
+    // run();
 }
 
 pub fn run() {
