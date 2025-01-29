@@ -1,5 +1,6 @@
-use std::{num::NonZero, sync::Arc};
+use std::{f32::consts::PI, num::NonZero, sync::Arc};
 
+use glam::{Mat4, Vec3};
 use wgpu::{
     include_wgsl,
     util::{BufferInitDescriptor, DeviceExt},
@@ -81,9 +82,25 @@ impl Renderer {
 
         let shader_module = device.create_shader_module(include_wgsl!("shader.wgsl"));
 
+        let inverse_proj = Mat4::perspective_infinite_reverse_rh(
+            90.0 * PI / 180.0,
+            window_size.width as f32 / window_size.height as f32,
+            0.1,
+        );
+
+        let position = Vec3::new(0.0, 0.0, 0.0);
+        let inverse_view =
+            Mat4::look_to_rh(position, Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 1.0, 0.0));
+
+        let mut camera_buffer = [0; 144];
+
+        camera_buffer[0..64].copy_from_slice(bytemuck::bytes_of(&inverse_proj));
+        camera_buffer[64..128].copy_from_slice(bytemuck::bytes_of(&inverse_view));
+        camera_buffer[128..140].copy_from_slice(bytemuck::bytes_of(&position));
+
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: &[0; 144],
+            contents: &camera_buffer,
             usage: BufferUsages::UNIFORM,
         });
 
