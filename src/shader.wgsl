@@ -25,7 +25,7 @@ fn sky_color(ray_origin: vec3<f32>, ray_direction: vec3<f32>) -> vec3<f32> {
 }
 
 fn ray_color(ray_origin: vec3<f32>, ray_direction: vec3<f32>) -> vec3<f32> {
-  if (hit_sphere(vec3(0, 0, -1), 0.5, ray_origin, ray_direction)) {
+  if (hit_sphere(vec3(0, 0, 1), 0.5, ray_origin, ray_direction)) {
     return vec3(1.0, 0.0, 0.0);
   }
 
