@@ -1,19 +1,28 @@
 use std::{num::NonZero, sync::Arc};
 
-use glam::{Mat4, Vec3};
+use bytemuck::{Pod, Zeroable};
+use glam::Mat4;
 use wgpu::{
-    include_wgsl,
-    util::{BufferInitDescriptor, DeviceExt},
-    Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, BufferBindingType, BufferUsages,
-    CommandEncoderDescriptor, CompositeAlphaMode, ComputePassDescriptor, ComputePipeline,
-    ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
-    InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
-    PresentMode, Queue, RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface,
-    SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    include_wgsl, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
+    BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
+    CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
+    DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, MemoryHints,
+    PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RequestAdapterOptions,
+    ShaderStages, StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, Texture,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
+    TextureViewDimension,
 };
 use winit::{dpi::PhysicalSize, window::Window};
+
+const CAMERA_BUFFER_SIZE: usize = 128;
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct CameraMatrices {
+    inverse_proj: Mat4,
+    inverse_view: Mat4,
+}
 
 pub struct Renderer {
     surface: Surface<'static>,
@@ -22,6 +31,7 @@ pub struct Renderer {
     pipeline: ComputePipeline,
     render_texture: Texture,
     bind_group: BindGroup,
+    camera_buffer: Buffer,
     window_size: PhysicalSize<u32>,
 }
 
@@ -82,28 +92,11 @@ impl Renderer {
 
         let shader_module = device.create_shader_module(include_wgsl!("shader.wgsl"));
 
-        let inverse_proj = Mat4::perspective_lh(
-            90.0f32.to_radians(),
-            window_size.width as f32 / window_size.height as f32,
-            0.1,
-            100.0,
-        )
-        .inverse();
-
-        let position = Vec3::new(0.0, 0.0, -2.0);
-        let inverse_view =
-            Mat4::look_to_lh(position, Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 1.0, 0.0))
-                .inverse();
-
-        let mut camera_buffer = [0; 128];
-
-        camera_buffer[0..64].copy_from_slice(bytemuck::bytes_of(&inverse_proj));
-        camera_buffer[64..128].copy_from_slice(bytemuck::bytes_of(&inverse_view));
-
-        let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        let camera_buffer = device.create_buffer(&BufferDescriptor {
             label: None,
-            contents: &camera_buffer,
-            usage: BufferUsages::UNIFORM,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            size: CAMERA_BUFFER_SIZE as u64,
+            mapped_at_creation: false,
         });
 
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -125,7 +118,7 @@ impl Renderer {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(NonZero::new(128).unwrap()),
+                        min_binding_size: Some(NonZero::new(CAMERA_BUFFER_SIZE as u64).unwrap()),
                     },
                     count: None,
                 },
@@ -186,8 +179,20 @@ impl Renderer {
             pipeline,
             render_texture,
             bind_group,
+            camera_buffer,
             window_size,
         }
+    }
+
+    pub fn update_camera(&self, view: &Mat4, projection: &Mat4) {
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::bytes_of(&CameraMatrices {
+                inverse_view: view.inverse(),
+                inverse_proj: projection.inverse(),
+            }),
+        );
     }
 
     pub fn render(&mut self) -> Result<(), SurfaceError> {

@@ -3,6 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use glam::{Mat4, Vec3};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -63,8 +64,22 @@ impl ApplicationHandler for App {
                 )
                 .unwrap(),
         );
+        let window_size = window.inner_size();
 
-        self.state = Some((window.clone(), pollster::block_on(Renderer::new(window))));
+        let renderer = pollster::block_on(Renderer::new(window.clone()));
+
+        let position = Vec3::new(0.0, 0.0, -2.0);
+        let projection = Mat4::perspective_lh(
+            90.0f32.to_radians(),
+            window_size.width as f32 / window_size.height as f32,
+            0.1,
+            100.0,
+        );
+        let view = Mat4::look_to_lh(position, Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 1.0, 0.0));
+
+        renderer.update_camera(&view, &projection);
+
+        self.state = Some((window, renderer));
     }
 
     fn window_event(
