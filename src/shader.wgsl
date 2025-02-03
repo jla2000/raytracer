@@ -47,12 +47,13 @@ fn trace_ray(ray: Ray) -> vec3<f32> {
 }
 
 fn random(x: f32) -> f32 {
-    return fract(sin(x) * 43758.5453); // Generates a pseudo-random value
+    return fract(sin(x) * 43758.5453);
 }
-fn random2d(coord: vec2<f32>) -> vec2f {
-    let randX = random(push_constants.time + coord.x + 0.0);  // Offset to ensure randomness in X
-    let randY = random(push_constants.time + coord.y + 1.0);  // Offset to ensure randomness in Y
-    return vec2f(randX, randY);    // Return the random 2D vector
+
+fn noise(coord: vec2<f32>) -> vec2<f32> {
+    let rand_x = random(push_constants.time + coord.x + 0.0);
+    let rand_y = random(push_constants.time + coord.y + 1.0);
+    return vec2f(rand_x, rand_y);
 }
 
 @compute
@@ -60,7 +61,7 @@ fn random2d(coord: vec2<f32>) -> vec2f {
 fn render(@builtin(global_invocation_id) gid: vec3<u32>) {
   let render_texture_size = vec2<f32>(textureDimensions(render_texture).xy);
 
-  let pixel = vec2<f32>(gid.xy) + random2d(vec2<f32>(gid.xy));
+  let pixel = vec2<f32>(gid.xy) + noise(vec2<f32>(gid.xy));
 
   let ndc = vec2<f32>(
       f32(pixel.x) / render_texture_size.x * 2.0 - 1.0,

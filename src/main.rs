@@ -1,6 +1,6 @@
 use std::{
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 use glam::{Mat4, Vec3};
@@ -18,7 +18,7 @@ use renderer::*;
 struct App {
     state: Option<(Arc<Window>, Renderer)>,
     counter: FpsCounter,
-    start: Instant,
+    time_since_start: Instant,
 }
 
 struct FpsCounter {
@@ -92,14 +92,14 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
                 if let Some((window, renderer)) = &mut self.state {
-                    let time = self.start.elapsed().as_secs_f32();
-                    let num_samples = renderer.render(time).unwrap();
+                    let num_samples = renderer
+                        .render(self.time_since_start.elapsed().as_secs_f32())
+                        .unwrap();
                     window.request_redraw();
 
                     if let Some(fps) = self.counter.get_fps() {
-                        window.set_title(&format!(
-                            "raytracer - FPS: {fps}, Samples: {num_samples}, Time: {time}"
-                        ));
+                        window
+                            .set_title(&format!("raytracer - FPS: {fps}, Samples: {num_samples}"));
                     }
                 }
             }
@@ -118,7 +118,7 @@ fn main() {
         .run_app(&mut App {
             state: None,
             counter: FpsCounter::default(),
-            start: Instant::now(),
+            time_since_start: Instant::now(),
         })
         .unwrap();
 }
