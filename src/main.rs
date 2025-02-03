@@ -64,6 +64,8 @@ impl ApplicationHandler for App {
                 )
                 .unwrap(),
         );
+        window.focus_window();
+
         let window_size = window.inner_size();
 
         let mut renderer = pollster::block_on(Renderer::new(window.clone()));
@@ -75,7 +77,11 @@ impl ApplicationHandler for App {
             0.1,
             100.0,
         );
-        let view = Mat4::look_to_lh(position, Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 1.0, 0.0));
+        let view = Mat4::look_to_lh(
+            position,
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        );
 
         renderer.update_camera(&view, &projection);
 
