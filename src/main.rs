@@ -57,7 +57,7 @@ impl ApplicationHandler for App {
             event_loop
                 .create_window(
                     WindowAttributes::default()
-                        .with_inner_size(PhysicalSize::new(1920, 1080))
+                        .with_inner_size(PhysicalSize::new(800, 600))
                         .with_resizable(false)
                         .with_title("raytracer"),
                 )
@@ -91,23 +91,7 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    struct Logger;
-    impl log::Log for Logger {
-        fn enabled(&self, metadata: &log::Metadata) -> bool {
-            metadata.level() <= log::Level::Info
-        }
-
-        fn log(&self, record: &log::Record) {
-            if self.enabled(record.metadata()) {
-                println!("{} - {}", record.level(), record.args());
-            }
-        }
-
-        fn flush(&self) {}
-    }
-    log::set_boxed_logger(Box::new(Logger))
-        .map(|_| log::set_max_level(log::LevelFilter::Warn))
-        .unwrap();
+    env_logger::init_from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"));
 
     let event_loop = EventLoop::new().unwrap();
 

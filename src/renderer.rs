@@ -43,8 +43,8 @@ impl Renderer {
             .await
             .unwrap();
 
-        println!(
-            "INFO - Gpu: {}, Backend: {}",
+        log::info!(
+            "Gpu: {}, Backend: {}",
             adapter.get_info().name,
             adapter.get_info().backend
         );
