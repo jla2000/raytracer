@@ -7,7 +7,6 @@ var<uniform> camera: RayCamera;
 struct RayCamera {
   inverse_proj: mat4x4<f32>,
   inverse_view: mat4x4<f32>,
-  position: vec3<f32>,
 }
 
 fn hit_sphere(center: vec3<f32>, radius: f32, ray_origin: vec3<f32>, ray_direction: vec3<f32>) -> bool {
@@ -46,7 +45,7 @@ fn render(@builtin(global_invocation_id) gid: vec3<u32>) {
   let view_coords = camera.inverse_proj * vec4(normalized_device_coords, 0.0, 1.0);
   let world_coords = camera.inverse_view * view_coords;
 
-  let ray_origin = camera.position;
+  let ray_origin = (camera.inverse_view * vec4(0, 0, 0, 1)).xyz;
   let ray_direction = normalize(world_coords.xyz - ray_origin);
 
   textureStore(render_texture, pixel_coords, vec4(ray_color(ray_origin, ray_direction), 1.0));

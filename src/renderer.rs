@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, num::NonZero, sync::Arc};
+use std::{num::NonZero, sync::Arc};
 
 use glam::{Mat4, Vec3};
 use wgpu::{
@@ -95,11 +95,10 @@ impl Renderer {
             Mat4::look_to_lh(position, Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 1.0, 0.0))
                 .inverse();
 
-        let mut camera_buffer = [0; 144];
+        let mut camera_buffer = [0; 128];
 
         camera_buffer[0..64].copy_from_slice(bytemuck::bytes_of(&inverse_proj));
         camera_buffer[64..128].copy_from_slice(bytemuck::bytes_of(&inverse_view));
-        camera_buffer[128..140].copy_from_slice(bytemuck::bytes_of(&position));
 
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
@@ -126,7 +125,7 @@ impl Renderer {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(NonZero::new(144).unwrap()),
+                        min_binding_size: Some(NonZero::new(128).unwrap()),
                     },
                     count: None,
                 },
