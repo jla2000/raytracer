@@ -62,8 +62,13 @@ fn rand_xorshift() -> u32 {
   return rng_state;
 }
 
+fn rand_lcg() -> u32 {
+  rng_state = 1664525 * rng_state + 1013904223;
+  return rng_state;
+}
+
 fn rand_float() -> f32 {
-  return f32(rand_xorshift()) / pow(2.0, 32.0);
+  return f32(rand_lcg()) / pow(2.0, 32.0);
 }
 
 fn random_noise(coord: vec2f) -> vec2f {
@@ -93,4 +98,7 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
   let old_color = textureLoad(render_texture, gid.xy).xyz;
   let mixed_color = mix(old_color, ray_color, (1.0 / f32(push_constants.num_samples)));
   textureStore(render_texture, gid.xy, vec4(mixed_color, 1.0));
+
+  //let rand = rand_float();
+  //textureStore(render_texture, gid.xy, vec4(rand, rand, rand, 1.0));
 }
