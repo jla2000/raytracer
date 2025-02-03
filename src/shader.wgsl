@@ -37,16 +37,16 @@ fn render(@builtin(global_invocation_id) gid: vec3<u32>) {
   let pixel_coords = gid.xy;
   let surface_size = vec2<f32>(textureDimensions(render_texture).xy);
 
-  let normalized_device_coords = vec2<f32>(
+  let ndc = vec2<f32>(
       f32(pixel_coords.x) / surface_size.x * 2.0 - 1.0,
       1.0 - f32(pixel_coords.y) / surface_size.y * 2.0
   );
 
-  let view_coords = camera.inverse_proj * vec4(normalized_device_coords, 0.0, 1.0);
-  let world_coords = camera.inverse_view * view_coords;
+  let direction_view_space = camera.inverse_proj * vec4(ndc, 0.0, 1.0);
+  let direction_world_space = normalize(camera.inverse_view * vec4(direction_view_space.xyz, 0));
 
   let ray_origin = (camera.inverse_view * vec4(0, 0, 0, 1)).xyz;
-  let ray_direction = normalize(world_coords.xyz - ray_origin);
+  let ray_direction = direction_world_space.xyz;
 
   textureStore(render_texture, pixel_coords, vec4(ray_color(ray_origin, ray_direction), 1.0));
 }

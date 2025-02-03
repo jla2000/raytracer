@@ -90,7 +90,7 @@ impl Renderer {
         )
         .inverse();
 
-        let position = Vec3::new(0.0, 0.0, 0.0);
+        let position = Vec3::new(0.0, 0.0, -2.0);
         let inverse_view =
             Mat4::look_to_lh(position, Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 1.0, 0.0))
                 .inverse();
