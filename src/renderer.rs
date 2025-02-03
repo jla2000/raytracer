@@ -8,10 +8,10 @@ use wgpu::{
     BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
     CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
     DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, MemoryHints,
-    PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RequestAdapterOptions,
-    ShaderStages, StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, Texture,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension,
+    PipelineLayoutDescriptor, PowerPreference, PresentMode, PushConstantRange, Queue,
+    RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface, SurfaceConfiguration,
+    SurfaceError, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureViewDescriptor, TextureViewDimension,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -24,6 +24,13 @@ struct CameraMatrices {
     inverse_view: Mat4,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct PushConstants {
+    time: f32,
+    num_samples: u32,
+}
+
 pub struct Renderer {
     surface: Surface<'static>,
     device: Device,
@@ -33,6 +40,7 @@ pub struct Renderer {
     bind_group: BindGroup,
     camera_buffer: Buffer,
     window_size: PhysicalSize<u32>,
+    num_samples: u32,
 }
 
 impl Renderer {
@@ -46,7 +54,7 @@ impl Renderer {
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::LowPower,
+                power_preference: PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -64,8 +72,12 @@ impl Renderer {
                 &DeviceDescriptor {
                     label: None,
                     required_features: Features::BGRA8UNORM_STORAGE
-                        | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                    required_limits: Limits::default(),
+                        | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                        | Features::PUSH_CONSTANTS,
+                    required_limits: Limits {
+                        max_push_constant_size: size_of::<PushConstants>() as u32,
+                        ..Default::default()
+                    },
                     memory_hints: MemoryHints::default(),
                 },
                 None,
@@ -128,7 +140,10 @@ impl Renderer {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            push_constant_ranges: &[PushConstantRange {
+                stages: ShaderStages::COMPUTE,
+                range: 0..(size_of::<PushConstants>() as u32),
+            }],
         });
 
         let pipeline = device.create_compute_pipeline(&ComputePipelineDescriptor {
@@ -181,10 +196,11 @@ impl Renderer {
             bind_group,
             camera_buffer,
             window_size,
+            num_samples: 0,
         }
     }
 
-    pub fn update_camera(&self, view: &Mat4, projection: &Mat4) {
+    pub fn update_camera(&mut self, view: &Mat4, projection: &Mat4) {
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -193,9 +209,10 @@ impl Renderer {
                 inverse_proj: projection.inverse(),
             }),
         );
+        self.num_samples = 0;
     }
 
-    pub fn render(&mut self) -> Result<(), SurfaceError> {
+    pub fn render(&mut self, time: f32) -> Result<u32, SurfaceError> {
         let surface_texture = self.surface.get_current_texture()?;
 
         let mut encoder = self
@@ -209,6 +226,13 @@ impl Renderer {
 
         compute_pass.set_pipeline(&self.pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
+        compute_pass.set_push_constants(
+            0,
+            bytemuck::bytes_of(&PushConstants {
+                time,
+                num_samples: self.num_samples,
+            }),
+        );
         compute_pass.dispatch_workgroups(
             self.window_size.width / 10,
             self.window_size.height / 10,
@@ -226,6 +250,8 @@ impl Renderer {
         self.queue.submit(std::iter::once(encoder.finish()));
         surface_texture.present();
 
-        Ok(())
+        self.num_samples += 1;
+
+        Ok(self.num_samples)
     }
 }

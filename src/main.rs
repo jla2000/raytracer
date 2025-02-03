@@ -1,6 +1,6 @@
 use std::{
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use glam::{Mat4, Vec3};
@@ -15,10 +15,10 @@ use winit::{
 mod renderer;
 use renderer::*;
 
-#[derive(Default)]
 struct App {
     state: Option<(Arc<Window>, Renderer)>,
     counter: FpsCounter,
+    start: Instant,
 }
 
 struct FpsCounter {
@@ -58,7 +58,7 @@ impl ApplicationHandler for App {
             event_loop
                 .create_window(
                     WindowAttributes::default()
-                        .with_inner_size(PhysicalSize::new(800, 600))
+                        .with_inner_size(PhysicalSize::new(1280, 800))
                         .with_resizable(false)
                         .with_title("raytracer"),
                 )
@@ -66,9 +66,9 @@ impl ApplicationHandler for App {
         );
         let window_size = window.inner_size();
 
-        let renderer = pollster::block_on(Renderer::new(window.clone()));
+        let mut renderer = pollster::block_on(Renderer::new(window.clone()));
 
-        let position = Vec3::new(0.0, 0.0, -2.0);
+        let position = Vec3::new(0.0, 0.0, 0.0);
         let projection = Mat4::perspective_lh(
             90.0f32.to_radians(),
             window_size.width as f32 / window_size.height as f32,
@@ -92,11 +92,14 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
                 if let Some((window, renderer)) = &mut self.state {
-                    renderer.render().unwrap();
+                    let time = self.start.elapsed().as_secs_f32();
+                    let num_samples = renderer.render(time).unwrap();
                     window.request_redraw();
 
                     if let Some(fps) = self.counter.get_fps() {
-                        window.set_title(&format!("raytracer - FPS: {}", fps));
+                        window.set_title(&format!(
+                            "raytracer - FPS: {fps}, Samples: {num_samples}, Time: {time}"
+                        ));
                     }
                 }
             }
@@ -111,5 +114,11 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(&mut App::default()).unwrap();
+    event_loop
+        .run_app(&mut App {
+            state: None,
+            counter: FpsCounter::default(),
+            start: Instant::now(),
+        })
+        .unwrap();
 }
