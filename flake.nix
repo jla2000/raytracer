@@ -35,7 +35,7 @@
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
         };
 
-        windows = pkgs.mkShell rec {
+        windows = pkgs.mkShellNoCC {
           nativeBuildInputs = with pkgs; [
             (rust-bin.stable.latest.minimal.override {
               targets = [
@@ -43,8 +43,9 @@
               ];
             })
             pkgsCross.mingwW64.buildPackages.gcc
-            pkgsCross.mingwW64.windows.pthreads
           ];
+          CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${pkgs.pkgsCross.mingwW64.windows.pthreads}/lib";
         };
       };
     };
