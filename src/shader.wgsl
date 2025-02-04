@@ -73,7 +73,7 @@ fn trace_ray(ray: Ray) -> vec3f {
   let max_bounces = 10;
   for (var i = 0; i < max_bounces; i++) {
     let hit = trace_impl(walk_ray);
-    if (hit.hit) {
+    if (hit.hit && hit.distance > 0.001) {
       color *= 0.5;
       walk_ray.origin = walk_ray.origin + walk_ray.direction * hit.distance;
       walk_ray.direction = random_on_hemisphere(hit.normal);
