@@ -1,17 +1,23 @@
 use std::{num::NonZero, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use wgpu::{
-    include_wgsl, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
-    BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
-    CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
-    DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, MemoryHints,
-    PipelineLayoutDescriptor, PowerPreference, PresentMode, PushConstantRange, Queue,
-    RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface, SurfaceConfiguration,
-    SurfaceError, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureViewDescriptor, TextureViewDimension,
+    hal::AccelerationStructureGeometryFlags,
+    include_wgsl,
+    util::{BufferInitDescriptor, DeviceExt},
+    AccelerationStructureFlags, AccelerationStructureUpdateMode, Backends, BindGroup,
+    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    BindingResource, BindingType, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
+    BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, BufferBindingType,
+    BufferDescriptor, BufferUsages, CommandEncoderDescriptor, CompositeAlphaMode,
+    ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, CreateBlasDescriptor,
+    CreateTlasDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
+    InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
+    PresentMode, PushConstantRange, Queue, RequestAdapterOptions, ShaderStages,
+    StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    TlasInstance, TlasPackage, VertexFormat,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -73,7 +79,9 @@ impl Renderer {
                     label: None,
                     required_features: Features::BGRA8UNORM_STORAGE
                         | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | Features::PUSH_CONSTANTS,
+                        | Features::PUSH_CONSTANTS
+                        | Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                        | Features::EXPERIMENTAL_RAY_QUERY,
                     required_limits: Limits {
                         max_push_constant_size: size_of::<PushConstants>() as u32,
                         ..Default::default()
@@ -134,6 +142,12 @@ impl Renderer {
                     },
                     count: None,
                 },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::AccelerationStructure,
+                    count: None,
+                },
             ],
         });
 
@@ -172,6 +186,82 @@ impl Renderer {
 
         let render_texture_view = render_texture.create_view(&TextureViewDescriptor::default());
 
+        let tlas = device.create_tlas(&CreateTlasDescriptor {
+            label: None,
+            max_instances: 1,
+            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: AccelerationStructureUpdateMode::Build,
+        });
+
+        let geometry_size = BlasTriangleGeometrySizeDescriptor {
+            vertex_format: VertexFormat::Float32x3,
+            vertex_count: 3,
+            index_format: None,
+            index_count: None,
+            flags: AccelerationStructureGeometryFlags::OPAQUE,
+        };
+        let blas = device.create_blas(
+            &CreateBlasDescriptor {
+                label: None,
+                flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: AccelerationStructureUpdateMode::Build,
+            },
+            BlasGeometrySizeDescriptors::Triangles {
+                descriptors: vec![geometry_size.clone()],
+            },
+        );
+
+        let tlas_package = TlasPackage::new_with_instances(
+            tlas,
+            vec![Some(TlasInstance::new(
+                &blas,
+                [
+                    1.0, 0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, 0.0, //
+                    0.0, 0.0, 1.0, 0.0, //
+                ],
+                0,
+                1,
+            ))],
+        );
+
+        #[derive(Copy, Clone, Pod, Zeroable)]
+        #[repr(C)]
+        struct Triangle {
+            v0: Vec3,
+            v1: Vec3,
+            v2: Vec3,
+        }
+
+        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("vertex buffer"),
+            contents: bytemuck::bytes_of(&Triangle {
+                v0: Vec3::new(-0.5, 0.0, -1.0),
+                v1: Vec3::new(-0.5, 1.0, -1.0),
+                v2: Vec3::new(0.5, 0.0, -1.0),
+            }),
+            usage: BufferUsages::BLAS_INPUT,
+        });
+
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
+        encoder.build_acceleration_structures(
+            std::iter::once(&BlasBuildEntry {
+                blas: &blas,
+                geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                    size: &geometry_size,
+                    vertex_buffer: &vertex_buffer,
+                    first_vertex: 0,
+                    vertex_stride: 3,
+                    index_buffer: None,
+                    first_index: None,
+                    transform_buffer: None,
+                    transform_buffer_offset: None,
+                }]),
+            }),
+            std::iter::once(&tlas_package),
+        );
+        queue.submit(std::iter::once(encoder.finish()));
+
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &bind_group_layout,
@@ -183,6 +273,10 @@ impl Renderer {
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::Buffer(camera_buffer.as_entire_buffer_binding()),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: tlas_package.as_binding(),
                 },
             ],
         });

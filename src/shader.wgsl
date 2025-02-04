@@ -4,6 +4,9 @@ var render_texture: texture_storage_2d<bgra8unorm, read_write>;
 @group(0) @binding(1)
 var<uniform> camera: CameraMatrices;
 
+@group(0) @binding(2)
+var acc_struct: acceleration_structure;
+
 var<push_constant> push_constants: PushConstants;
 
 var<private> rng_state: u32;
@@ -18,69 +21,24 @@ struct PushConstants {
   num_samples: u32,
 }
 
-struct Ray {
-  origin: vec3f,
-  direction: vec3f,
-}
-
-struct HitInfo {
-  distance: f32,
-  normal: vec3f,
-  hit: bool,
-}
-
-fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> f32 {
-  let oc = center - ray.origin;
-  let a = dot(ray.direction, ray.direction);
-  let b = -2.0 * dot(ray.direction, oc);
-  let c = dot(oc, oc) - radius*radius;
-  let discriminant = b*b - 4*a*c;
-
-  if discriminant <= 0 {
-    return -1.0;
-  } else {
-    return (-b - sqrt(discriminant)) / 2.0 * a;
-  }
-}
-
-fn sky_color(ray: Ray) -> vec3f {
-  let a = 0.5 * (ray.direction.y + 1.0);
+fn sky_color(ray_desc: RayDesc) -> vec3f {
+  let a = 0.5 * (ray_desc.dir.y + 1.0);
   return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0);
 }
 
-fn trace_impl(ray: Ray) -> HitInfo {
-  var dist = 0.0;
+fn trace_ray(ray_desc: RayDesc) -> vec3f {
+  var ray_query: ray_query;
 
-  dist = hit_sphere(vec3(0, 0, -1), 0.5, ray);
-  if (dist > 0) {
-    let normal = normalize((ray.origin + ray.direction * dist) - vec3f(0, 0, -1));
-    return HitInfo(dist, normal, true);
+  rayQueryInitialize(&ray_query, acc_struct, ray_desc);
+  rayQueryProceed(&ray_query);
+
+  let ray_intersection = rayQueryGetCommittedIntersection (&ray_query);
+  
+  if (ray_intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
+    return vec3(1.0, 0.0, 0.0);
   }
 
-  dist = hit_sphere(vec3(0, -100.5, -1), 100, ray);
-  if (dist > 0) {
-    let normal = normalize((ray.origin + ray.direction * dist) - vec3f(0, -100.5, -1));
-    return HitInfo(dist, normal, true);
-  }
-
-  return HitInfo(0.0, vec3f(0.0), false);
-}
-
-fn trace_ray(ray: Ray) -> vec3f {
-  var color = sky_color(ray);
-  var walk_ray = ray;
-
-  let max_bounces = 10;
-  for (var i = 0; i < max_bounces; i++) {
-    let hit = trace_impl(walk_ray);
-    if (hit.hit && hit.distance > 0.001) {
-      color *= 0.5;
-      walk_ray.origin = walk_ray.origin + walk_ray.direction * hit.distance;
-      walk_ray.direction = normalize(hit.normal + random_on_hemisphere(hit.normal));
-    }
-  }
-
-  return color;
+  return sky_color(ray_desc);
 }
 
 
@@ -120,7 +78,6 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
   rng_state = (gid.x * 1973 + gid.y * 9277 + push_constants.num_samples * 26699) | 1;
 
   let render_texture_size = vec2f(textureDimensions(render_texture).xy);
-
   let pixel = vec2f(gid.xy) + vec2f(rand_float(), rand_float()) - 0.5;
 
   let ndc = vec2f(
@@ -132,7 +89,14 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
   let direction_view_space = normalize(camera.inverse_proj * vec4(ndc, 0.0, 1.0));
   let direction_world_space = normalize(camera.inverse_view * vec4(direction_view_space.xyz, 0));
 
-  let ray_color = gamma_correct(trace_ray(Ray(origin_world_space.xyz, direction_world_space.xyz)));
+  let ray_color = trace_ray(RayDesc(
+    0,
+    1,
+    0.1,
+    100.0,
+    origin_world_space.xyz,
+    direction_world_space.xyz
+  ));
 
   let old_color = textureLoad(render_texture, gid.xy).xyz;
   let mixed_color = mix(old_color, ray_color, (1.0 / f32(push_constants.num_samples)));
