@@ -57,9 +57,9 @@ fn trace_impl(ray: Ray) -> HitInfo {
     return HitInfo(dist, normal, true);
   }
 
-  dist = hit_sphere(vec3(0, -10, -5), 10, ray);
+  dist = hit_sphere(vec3(0, -100.5, -1), 100, ray);
   if (dist > 0) {
-    let normal = normalize((ray.origin + ray.direction * dist) - vec3f(0, -10, -5));
+    let normal = normalize((ray.origin + ray.direction * dist) - vec3f(0, -100.5, -1));
     return HitInfo(dist, normal, true);
   }
 
@@ -76,7 +76,7 @@ fn trace_ray(ray: Ray) -> vec3f {
     if (hit.hit && hit.distance > 0.001) {
       color *= 0.5;
       walk_ray.origin = walk_ray.origin + walk_ray.direction * hit.distance;
-      walk_ray.direction = random_on_hemisphere(hit.normal);
+      walk_ray.direction = normalize(hit.normal + random_on_hemisphere(hit.normal));
     }
   }
 
@@ -110,10 +110,14 @@ fn random_on_hemisphere(normal: vec3f) -> vec3f {
   }
 }
 
+fn gamma_correct(color: vec3f) -> vec3f {
+  return pow(color, vec3(1.0 / 2.2));
+}
+
 @compute
 @workgroup_size(10, 10, 1)
 fn render(@builtin(global_invocation_id) gid: vec3u) {
-  rng_state = (gid.x * 1973 + gid.y * 9277 + push_constants.num_samples * 26688) | 1;
+  rng_state = (gid.x * 1973 + gid.y * 9277 + push_constants.num_samples * 26699) | 1;
 
   let render_texture_size = vec2f(textureDimensions(render_texture).xy);
 
@@ -128,7 +132,7 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
   let direction_view_space = normalize(camera.inverse_proj * vec4(ndc, 0.0, 1.0));
   let direction_world_space = normalize(camera.inverse_view * vec4(direction_view_space.xyz, 0));
 
-  let ray_color = trace_ray(Ray(origin_world_space.xyz, direction_world_space.xyz));
+  let ray_color = gamma_correct(trace_ray(Ray(origin_world_space.xyz, direction_world_space.xyz)));
 
   let old_color = textureLoad(render_texture, gid.xy).xyz;
   let mixed_color = mix(old_color, ray_color, (1.0 / f32(push_constants.num_samples)));
