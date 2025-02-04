@@ -98,7 +98,7 @@ fn rand_float() -> f32 {
 }
 
 fn random_unit_vec() -> vec3f {
-  return normalize(vec3f(rand_float(), rand_float(), rand_float()) - 0.5 * 2);
+  return normalize((vec3f(rand_float(), rand_float(), rand_float()) - 0.5) * 2);
 }
 
 fn random_on_hemisphere(normal: vec3f) -> vec3f {
