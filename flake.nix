@@ -33,14 +33,13 @@
             xorg.libXinerama
           ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
+          VK_LAYER_PATH = "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
         };
 
         windows = pkgs.mkShellNoCC {
           nativeBuildInputs = with pkgs; [
             (rust-bin.stable.latest.minimal.override {
-              targets = [
-                "x86_64-pc-windows-gnu"
-              ];
+              targets = [ "x86_64-pc-windows-gnu" ];
             })
             pkgsCross.mingwW64.buildPackages.gcc
           ];
