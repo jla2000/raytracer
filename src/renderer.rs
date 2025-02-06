@@ -52,7 +52,7 @@ pub struct Renderer {
 impl Renderer {
     pub async fn new(window: Arc<Window>) -> Self {
         let instance = Instance::new(&InstanceDescriptor {
-            backends: Backends::PRIMARY,
+            backends: Backends::VULKAN,
             ..Default::default()
         });
 
