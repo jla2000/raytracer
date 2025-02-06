@@ -236,9 +236,9 @@ impl Renderer {
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("vertex buffer"),
             contents: bytemuck::bytes_of(&Triangle {
-                v0: Vec3::new(-0.5, 0.0, -1.0),
-                v1: Vec3::new(-0.5, 1.0, -1.0),
-                v2: Vec3::new(0.5, 0.0, -1.0),
+                v0: Vec3::new(0.0, 0.5, 0.0),
+                v1: Vec3::new(-0.5, -0.5, 0.0),
+                v2: Vec3::new(0.5, -0.5, 0.0),
             }),
             usage: BufferUsages::BLAS_INPUT,
         });
