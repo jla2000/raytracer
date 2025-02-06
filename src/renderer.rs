@@ -251,7 +251,7 @@ impl Renderer {
                     size: &geometry_size,
                     vertex_buffer: &vertex_buffer,
                     first_vertex: 0,
-                    vertex_stride: 3,
+                    vertex_stride: size_of::<[f32; 3]>() as u64,
                     index_buffer: None,
                     first_index: None,
                     transform_buffer: None,
