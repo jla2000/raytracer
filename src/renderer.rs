@@ -1,7 +1,12 @@
-use std::{num::NonZero, sync::Arc};
+use std::{
+    io::{BufReader, Cursor},
+    num::NonZero,
+    sync::Arc,
+};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
+use obj::Obj;
 use wgpu::{
     hal::AccelerationStructureGeometryFlags,
     include_wgsl,
@@ -12,7 +17,7 @@ use wgpu::{
     BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, CompositeAlphaMode,
     ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, CreateBlasDescriptor,
-    CreateTlasDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
+    CreateTlasDescriptor, Device, DeviceDescriptor, Extent3d, Features, IndexFormat, Instance,
     InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
     PresentMode, PushConstantRange, Queue, RequestAdapterOptions, ShaderStages,
     StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor,
@@ -20,6 +25,8 @@ use wgpu::{
     TlasInstance, TlasPackage, VertexFormat,
 };
 use winit::{dpi::PhysicalSize, window::Window};
+
+use crate::obj::load_model;
 
 const CAMERA_BUFFER_SIZE: usize = 128;
 
@@ -193,11 +200,13 @@ impl Renderer {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
+        let model = load_model(include_str!("../models/Suzanne.obj"));
+
         let geometry_size = BlasTriangleGeometrySizeDescriptor {
             vertex_format: VertexFormat::Float32x3,
-            vertex_count: 3,
-            index_format: None,
-            index_count: None,
+            vertex_count: (model.vertices.len() / 3) as u32,
+            index_format: Some(IndexFormat::Uint16),
+            index_count: Some(model.indices.len() as u32),
             flags: AccelerationStructureGeometryFlags::OPAQUE,
         };
         let blas = device.create_blas(
@@ -225,21 +234,15 @@ impl Renderer {
             ))],
         );
 
-        #[derive(Copy, Clone, Pod, Zeroable)]
-        #[repr(C)]
-        struct Triangle {
-            v0: Vec3,
-            v1: Vec3,
-            v2: Vec3,
-        }
-
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("vertex buffer"),
-            contents: bytemuck::bytes_of(&Triangle {
-                v0: Vec3::new(-0.5, 0.0, -1.0),
-                v1: Vec3::new(-0.5, 1.0, -1.0),
-                v2: Vec3::new(0.5, 0.0, -1.0),
-            }),
+            contents: bytemuck::cast_slice(&model.vertices),
+            usage: BufferUsages::BLAS_INPUT,
+        });
+
+        let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("index buffer"),
+            contents: bytemuck::cast_slice(&model.indices),
             usage: BufferUsages::BLAS_INPUT,
         });
 
@@ -252,8 +255,8 @@ impl Renderer {
                     vertex_buffer: &vertex_buffer,
                     first_vertex: 0,
                     vertex_stride: size_of::<[f32; 3]>() as u64,
-                    index_buffer: None,
-                    first_index: None,
+                    index_buffer: Some(&index_buffer),
+                    first_index: Some(0),
                     transform_buffer: None,
                     transform_buffer_offset: None,
                 }]),
