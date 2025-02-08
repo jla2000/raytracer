@@ -72,7 +72,7 @@ impl ApplicationHandler for App {
 
         let mut renderer = pollster::block_on(Renderer::new(window.clone()));
 
-        let position = Vec3::new(2.0, 0.0, 2.0);
+        let position = Vec3::new(1.0, 0.0, 1.5);
         let projection = Mat4::perspective_lh(
             90.0f32.to_radians(),
             window_size.width as f32 / window_size.height as f32,

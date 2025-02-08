@@ -155,6 +155,26 @@ impl Renderer {
                     ty: BindingType::AccelerationStructure,
                     count: None,
                 },
+                BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -205,7 +225,7 @@ impl Renderer {
         let geometry_size = BlasTriangleGeometrySizeDescriptor {
             vertex_format: VertexFormat::Float32x3,
             vertex_count: (model.vertices.len() / 3) as u32,
-            index_format: Some(IndexFormat::Uint16),
+            index_format: Some(IndexFormat::Uint32),
             index_count: Some(model.indices.len() as u32),
             flags: AccelerationStructureGeometryFlags::OPAQUE,
         };
@@ -237,13 +257,13 @@ impl Renderer {
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("vertex buffer"),
             contents: bytemuck::cast_slice(&model.vertices),
-            usage: BufferUsages::BLAS_INPUT,
+            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
         });
 
         let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("index buffer"),
             contents: bytemuck::cast_slice(&model.indices),
-            usage: BufferUsages::BLAS_INPUT,
+            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
         });
 
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
@@ -280,6 +300,14 @@ impl Renderer {
                 BindGroupEntry {
                     binding: 2,
                     resource: tlas_package.as_binding(),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::Buffer(vertex_buffer.as_entire_buffer_binding()),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: BindingResource::Buffer(index_buffer.as_entire_buffer_binding()),
                 },
             ],
         });

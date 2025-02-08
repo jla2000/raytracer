@@ -7,6 +7,12 @@ var<uniform> camera: CameraMatrices;
 @group(0) @binding(2)
 var acc_struct: acceleration_structure;
 
+@group(0) @binding(3)
+var<storage, read> vertices: array<vec3f>;
+
+@group(0) @binding(4)
+var<storage, read> indices: array<u32>;
+
 var<push_constant> push_constants: PushConstants;
 
 var<private> rng_state: u32;
@@ -27,18 +33,36 @@ fn sky_color(ray_desc: RayDesc) -> vec3f {
 }
 
 fn trace_ray(ray_desc: RayDesc) -> vec3f {
+  var ray = ray_desc;
+  var color = sky_color(ray);
+
   var ray_query: ray_query;
 
-  rayQueryInitialize(&ray_query, acc_struct, ray_desc);
+  rayQueryInitialize(&ray_query, acc_struct, ray);
   rayQueryProceed(&ray_query);
 
-  let ray_intersection = rayQueryGetCommittedIntersection (&ray_query);
-  
-  if (ray_intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-    return vec3(1.0, 0.0, 0.0);
+  var intersection = rayQueryGetCommittedIntersection(&ray_query);
+
+  for (var i = 0; i < 10; i++) {
+    if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
+      let v0 = vertices[indices[intersection.primitive_index + 0]];
+      let v1 = vertices[indices[intersection.primitive_index + 1]];
+      let v2 = vertices[indices[intersection.primitive_index + 2]];
+      let normal = normalize(cross(v1 - v0, v2 - v0));
+
+      ray.origin = ray.origin + ray.dir * intersection.t;
+      ray.dir = normalize(normal + random_on_hemisphere(normal));
+      color *= 0.5;
+
+      rayQueryInitialize(&ray_query, acc_struct, ray);
+      rayQueryProceed(&ray_query);
+      intersection = rayQueryGetCommittedIntersection(&ray_query);
+    } else {
+      break;
+    }
   }
 
-  return sky_color(ray_desc);
+  return color;
 }
 
 

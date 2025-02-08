@@ -1,7 +1,7 @@
 #[derive(Default, Debug)]
 pub struct Model {
     pub vertices: Vec<f32>,
-    pub indices: Vec<u16>,
+    pub indices: Vec<u32>,
 }
 
 pub fn load_model(model_content: &str) -> Model {
@@ -36,6 +36,6 @@ pub fn load_model(model_content: &str) -> Model {
     model
 }
 
-fn parse_face(index: &str) -> u16 {
+fn parse_face(index: &str) -> u32 {
     index.split("/").next().unwrap().parse().unwrap()
 }
