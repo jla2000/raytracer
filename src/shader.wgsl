@@ -122,8 +122,7 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
     direction_world_space.xyz
   ));
 
-  let frame_count = push_constants.num_samples;
-  let old_color = textureLoad(render_texture, gid.xy).xyz;
-  let mixed_color = (old_color * f32(frame_count) + ray_color) / f32(frame_count + 1);
+  let accumulated_color = textureLoad(render_texture, gid.xy).xyz;
+  let mixed_color = mix(accumulated_color, ray_color, 1 / (f32(push_constants.num_samples) + 1));
   textureStore(render_texture, gid.xy, vec4(mixed_color, 1.0));
 }

@@ -1,12 +1,7 @@
-use std::{
-    io::{BufReader, Cursor},
-    num::NonZero,
-    sync::Arc,
-};
+use std::{num::NonZero, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
-use obj::Obj;
+use glam::Mat4;
 use wgpu::{
     hal::AccelerationStructureGeometryFlags,
     include_wgsl,
@@ -220,7 +215,20 @@ impl Renderer {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        let model = load_model(include_str!("../models/Suzanne.obj"));
+        let mut model = load_model(include_str!("../models/E30_Final01.obj"));
+
+        model.vertices.extend_from_slice(&[-5.0, 0.0, -5.0]);
+        model.vertices.extend_from_slice(&[5.0, 0.0, -5.0]);
+        model.vertices.extend_from_slice(&[-5.0, 0.0, 5.0]);
+        model.vertices.extend_from_slice(&[5.0, 0.0, 5.0]);
+
+        model.indices.push(((model.vertices.len() / 3) - 4) as u32);
+        model.indices.push(((model.vertices.len() / 3) - 3) as u32);
+        model.indices.push(((model.vertices.len() / 3) - 2) as u32);
+
+        model.indices.push(((model.vertices.len() / 3) - 3) as u32);
+        model.indices.push(((model.vertices.len() / 3) - 1) as u32);
+        model.indices.push(((model.vertices.len() / 3) - 2) as u32);
 
         let geometry_size = BlasTriangleGeometrySizeDescriptor {
             vertex_format: VertexFormat::Float32x3,
