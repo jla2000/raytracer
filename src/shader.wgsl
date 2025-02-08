@@ -11,7 +11,13 @@ var acc_struct: acceleration_structure;
 var<storage, read> vertices: array<vec3f>;
 
 @group(0) @binding(4)
-var<storage, read> indices: array<u32>;
+var<storage, read> vertex_indices: array<u32>;
+
+@group(0) @binding(5)
+var<storage, read> normals: array<vec3f>;
+
+@group(0) @binding(6)
+var<storage, read> normal_indices: array<u32>;
 
 var<push_constant> push_constants: PushConstants;
 
@@ -45,13 +51,14 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
 
   for (var i = 0; i < 10; i++) {
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-      let v0 = vertices[indices[intersection.primitive_index + 0]];
-      let v1 = vertices[indices[intersection.primitive_index + 1]];
-      let v2 = vertices[indices[intersection.primitive_index + 2]];
-      let normal = normalize(cross(v1 - v0, v2 - v0));
+      let n0 = normals[normal_indices[intersection.primitive_index * 3 + 0]];
+      let n1 = normals[normal_indices[intersection.primitive_index * 3 + 1]];
+      let n2 = normals[normal_indices[intersection.primitive_index * 3 + 2]];
+
+      let normal = (n0 + n1 + n2) / 3.0;
 
       ray.origin = ray.origin + ray.dir * intersection.t;
-      ray.dir = normalize(normal + random_on_hemisphere(normal));
+      ray.dir = normalize(random_on_hemisphere(ray.dir));
       color *= 0.5;
 
       rayQueryInitialize(&ray_query, acc_struct, ray);
@@ -115,7 +122,7 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
 
   let ray_color = trace_ray(RayDesc(
     0,
-    1,
+    0xff,
     0.1,
     100.0,
     origin_world_space.xyz,
