@@ -1,7 +1,7 @@
 use std::{num::NonZero, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use wgpu::{
     hal::AccelerationStructureGeometryFlags,
     include_wgsl,
@@ -170,6 +170,26 @@ impl Renderer {
                     },
                     count: None,
                 },
+                BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -215,26 +235,13 @@ impl Renderer {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        let mut model = load_model(include_str!("../models/E30_Final01.obj"));
-
-        model.vertices.extend_from_slice(&[-5.0, 0.0, -5.0]);
-        model.vertices.extend_from_slice(&[5.0, 0.0, -5.0]);
-        model.vertices.extend_from_slice(&[-5.0, 0.0, 5.0]);
-        model.vertices.extend_from_slice(&[5.0, 0.0, 5.0]);
-
-        model.indices.push(((model.vertices.len() / 3) - 4) as u32);
-        model.indices.push(((model.vertices.len() / 3) - 3) as u32);
-        model.indices.push(((model.vertices.len() / 3) - 2) as u32);
-
-        model.indices.push(((model.vertices.len() / 3) - 3) as u32);
-        model.indices.push(((model.vertices.len() / 3) - 1) as u32);
-        model.indices.push(((model.vertices.len() / 3) - 2) as u32);
+        let model = load_model(include_str!("../models/E30_Final01.obj"));
 
         let geometry_size = BlasTriangleGeometrySizeDescriptor {
             vertex_format: VertexFormat::Float32x3,
             vertex_count: (model.vertices.len() / 3) as u32,
             index_format: Some(IndexFormat::Uint32),
-            index_count: Some(model.indices.len() as u32),
+            index_count: Some(model.vertex_indices.len() as u32),
             flags: AccelerationStructureGeometryFlags::OPAQUE,
         };
         let blas = device.create_blas(
@@ -252,13 +259,9 @@ impl Renderer {
             tlas,
             vec![Some(TlasInstance::new(
                 &blas,
-                [
-                    1.0, 0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, 0.0, //
-                    0.0, 0.0, 1.0, 0.0, //
-                ],
+                Mat4::IDENTITY.to_cols_array()[..12].try_into().unwrap(),
                 0,
-                1,
+                0xff,
             ))],
         );
 
@@ -270,7 +273,19 @@ impl Renderer {
 
         let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("index buffer"),
-            contents: bytemuck::cast_slice(&model.indices),
+            contents: bytemuck::cast_slice(&model.vertex_indices),
+            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
+        });
+
+        let normal_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("normal buffer"),
+            contents: bytemuck::cast_slice(&model.normals),
+            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
+        });
+
+        let normal_index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("normal index buffer"),
+            contents: bytemuck::cast_slice(&model.normal_indices),
             usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
         });
 
@@ -316,6 +331,16 @@ impl Renderer {
                 BindGroupEntry {
                     binding: 4,
                     resource: BindingResource::Buffer(index_buffer.as_entire_buffer_binding()),
+                },
+                BindGroupEntry {
+                    binding: 5,
+                    resource: BindingResource::Buffer(normal_buffer.as_entire_buffer_binding()),
+                },
+                BindGroupEntry {
+                    binding: 6,
+                    resource: BindingResource::Buffer(
+                        normal_index_buffer.as_entire_buffer_binding(),
+                    ),
                 },
             ],
         });

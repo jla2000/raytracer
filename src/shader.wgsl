@@ -58,20 +58,32 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
       let normal = (n0 + n1 + n2) / 3.0;
 
       ray.origin = ray.origin + ray.dir * intersection.t;
-      ray.dir = normalize(random_on_hemisphere(ray.dir));
+      ray.dir = normalize(normal + random_on_hemisphere(normal));
       color *= 0.5;
 
       rayQueryInitialize(&ray_query, acc_struct, ray);
       rayQueryProceed(&ray_query);
       intersection = rayQueryGetCommittedIntersection(&ray_query);
     } else {
-      break;
+      if ray.dir.y < 0.0 {
+        let t = -ray.origin.y / ray.dir.y;
+        let normal = vec3(0.0, 1.0, 0.0);
+
+        ray.origin = ray.origin + ray.dir * t;
+        ray.dir = normalize(normal + random_on_hemisphere(normal));
+        color *= 0.5;
+
+        rayQueryInitialize(&ray_query, acc_struct, ray);
+        rayQueryProceed(&ray_query);
+        intersection = rayQueryGetCommittedIntersection(&ray_query);
+      } else {
+        break;
+      }
     }
   }
 
   return color;
 }
-
 
 fn rand_wang() -> u32 {
   rng_state = (rng_state ^ 61) ^ (rng_state >> 16);
