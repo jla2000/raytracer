@@ -8,16 +8,7 @@ var<uniform> camera: CameraMatrices;
 var acc_struct: acceleration_structure;
 
 @group(0) @binding(3)
-var<storage, read> vertices: array<vec3f>;
-
-@group(0) @binding(4)
-var<storage, read> vertex_indices: array<u32>;
-
-@group(0) @binding(5)
-var<storage, read> normals: array<vec3f>;
-
-@group(0) @binding(6)
-var<storage, read> normal_indices: array<u32>;
+var<storage, read> vertices: array<Vertex>;
 
 var<push_constant> push_constants: PushConstants;
 
@@ -31,6 +22,11 @@ struct CameraMatrices {
 struct PushConstants {
   time: f32,
   num_samples: u32,
+}
+
+struct Vertex {
+  position: vec4f,
+  normal: vec4f,
 }
 
 fn sky_color(ray_desc: RayDesc) -> vec3f {
@@ -51,9 +47,9 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
 
   for (var i = 0; i < 10; i++) {
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-      let n0 = normals[normal_indices[intersection.primitive_index * 3 + 0]];
-      let n1 = normals[normal_indices[intersection.primitive_index * 3 + 1]];
-      let n2 = normals[normal_indices[intersection.primitive_index * 3 + 2]];
+      let n0 = vertices[intersection.primitive_index * 3 + 0].normal.xyz;
+      let n1 = vertices[intersection.primitive_index * 3 + 1].normal.xyz;
+      let n2 = vertices[intersection.primitive_index * 3 + 2].normal.xyz;
 
       let normal = (n0 + n1 + n2) / 3.0;
 

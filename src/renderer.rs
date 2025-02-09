@@ -21,7 +21,7 @@ use wgpu::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::obj::load_model;
+use crate::obj::{load_model, Vertex};
 
 const CAMERA_BUFFER_SIZE: usize = 128;
 
@@ -160,36 +160,6 @@ impl Renderer {
                     },
                     count: None,
                 },
-                BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 6,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
             ],
         });
 
@@ -240,8 +210,8 @@ impl Renderer {
         let geometry_size = BlasTriangleGeometrySizeDescriptor {
             vertex_format: VertexFormat::Float32x3,
             vertex_count: (model.vertices.len() / 3) as u32,
-            index_format: Some(IndexFormat::Uint32),
-            index_count: Some(model.vertex_indices.len() as u32),
+            index_format: None,
+            index_count: None,
             flags: AccelerationStructureGeometryFlags::OPAQUE,
         };
         let blas = device.create_blas(
@@ -271,24 +241,6 @@ impl Renderer {
             usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
         });
 
-        let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("index buffer"),
-            contents: bytemuck::cast_slice(&model.vertex_indices),
-            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
-        });
-
-        let normal_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("normal buffer"),
-            contents: bytemuck::cast_slice(&model.normals),
-            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
-        });
-
-        let normal_index_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("normal index buffer"),
-            contents: bytemuck::cast_slice(&model.normal_indices),
-            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
-        });
-
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
         encoder.build_acceleration_structures(
             std::iter::once(&BlasBuildEntry {
@@ -297,9 +249,9 @@ impl Renderer {
                     size: &geometry_size,
                     vertex_buffer: &vertex_buffer,
                     first_vertex: 0,
-                    vertex_stride: size_of::<[f32; 3]>() as u64,
-                    index_buffer: Some(&index_buffer),
-                    first_index: Some(0),
+                    vertex_stride: size_of::<Vertex>() as u64,
+                    index_buffer: None,
+                    first_index: None,
                     transform_buffer: None,
                     transform_buffer_offset: None,
                 }]),
@@ -327,20 +279,6 @@ impl Renderer {
                 BindGroupEntry {
                     binding: 3,
                     resource: BindingResource::Buffer(vertex_buffer.as_entire_buffer_binding()),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::Buffer(index_buffer.as_entire_buffer_binding()),
-                },
-                BindGroupEntry {
-                    binding: 5,
-                    resource: BindingResource::Buffer(normal_buffer.as_entire_buffer_binding()),
-                },
-                BindGroupEntry {
-                    binding: 6,
-                    resource: BindingResource::Buffer(
-                        normal_index_buffer.as_entire_buffer_binding(),
-                    ),
                 },
             ],
         });
