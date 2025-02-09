@@ -28,7 +28,7 @@ struct Vertex {
   position: vec3f,
   _pad0: f32,
   normal: vec3f,
-  _pad1: f32,
+  material: u32,
 }
 
 fn sky_color(ray_desc: RayDesc) -> vec3f {
@@ -52,6 +52,7 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
       let n0 = vertices[intersection.primitive_index * 3 + 0].normal;
       let n1 = vertices[intersection.primitive_index * 3 + 1].normal;
       let n2 = vertices[intersection.primitive_index * 3 + 2].normal;
+      let material = vertices[intersection.primitive_index * 3].material;
 
       let u = intersection.barycentrics.x;
       let v = intersection.barycentrics.y;
@@ -60,7 +61,11 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
       let normal = normalize(w * n0 + u * n1 + v * n2);
 
       ray.origin = ray.origin + ray.dir * intersection.t;
-      ray.dir = normalize(normal + random_on_hemisphere(normal));
+      if (material != 0) {
+        ray.dir = reflect(ray.dir, normal);
+      } else {
+        ray.dir = normalize(normal + random_on_hemisphere(normal));
+      }
       color *= 0.5;
 
       rayQueryInitialize(&ray_query, acc_struct, ray);
@@ -73,7 +78,7 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
 
         ray.origin = ray.origin + ray.dir * t;
         ray.dir = normalize(normal + random_on_hemisphere(normal));
-        color *= 0.5;
+        color *= 0.4;
 
         rayQueryInitialize(&ray_query, acc_struct, ray);
         rayQueryProceed(&ray_query);

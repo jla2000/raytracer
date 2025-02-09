@@ -21,7 +21,7 @@ use wgpu::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::obj::{load_model, Vertex};
+use crate::model::{load_model, Vertex};
 
 const CAMERA_BUFFER_SIZE: usize = 128;
 

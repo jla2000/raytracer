@@ -15,7 +15,7 @@ use winit::{
 mod renderer;
 use renderer::*;
 
-mod obj;
+mod model;
 
 struct App {
     state: Option<(Arc<Window>, Renderer)>,
@@ -60,7 +60,7 @@ impl ApplicationHandler for App {
             event_loop
                 .create_window(
                     WindowAttributes::default()
-                        .with_inner_size(PhysicalSize::new(1280, 800))
+                        .with_inner_size(PhysicalSize::new(1920, 1080))
                         .with_resizable(false)
                         .with_title("raytracer"),
                 )
@@ -72,7 +72,7 @@ impl ApplicationHandler for App {
 
         let mut renderer = pollster::block_on(Renderer::new(window.clone()));
 
-        let position = Vec3::new(-2.0, 1.0, 2.0);
+        let position = Vec3::new(1.5, 1.0, 2.5);
         let projection = Mat4::perspective_lh(
             90.0f32.to_radians(),
             window_size.width as f32 / window_size.height as f32,
