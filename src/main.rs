@@ -4,7 +4,7 @@ use std::{
 };
 
 use camera::Camera;
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -18,6 +18,7 @@ use renderer::*;
 
 mod camera;
 mod model;
+mod noise;
 
 struct App {
     state: Option<State>,
