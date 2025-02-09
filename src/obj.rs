@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 
 #[derive(Default, Debug)]
 pub struct Model {
@@ -9,8 +9,21 @@ pub struct Model {
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 #[repr(C)]
 pub struct Vertex {
-    pub position: Vec4,
-    pub normal: Vec4,
+    pub position: Vec3,
+    pub _pad0: f32,
+    pub normal: Vec3,
+    pub _pad1: f32,
+}
+
+impl Vertex {
+    fn new(position: Vec3, normal: Vec3) -> Self {
+        Self {
+            position,
+            normal,
+            _pad0: 0.0,
+            _pad1: 0.0,
+        }
+    }
 }
 
 pub fn load_model(model_content: &str) -> Model {
@@ -22,35 +35,33 @@ pub fn load_model(model_content: &str) -> Model {
     for line in model_content.lines() {
         let values = line.split(" ").collect::<Vec<_>>();
         match values.as_slice() {
-            ["v", v0, v1, v2] => temp_vertices.push(Vec4::new(
+            ["v", v0, v1, v2] => temp_vertices.push(Vec3::new(
                 v0.parse().unwrap(),
                 v1.parse().unwrap(),
                 v2.parse().unwrap(),
-                1.0,
             )),
-            ["vn", n0, n1, n2] => temp_normals.push(Vec4::new(
+            ["vn", n0, n1, n2] => temp_normals.push(Vec3::new(
                 n0.parse().unwrap(),
                 n1.parse().unwrap(),
                 n2.parse().unwrap(),
-                1.0,
             )),
             ["f", f0, f1, f2] => {
                 let indices0 = parse_indices(f0);
                 let indices1 = parse_indices(f1);
                 let indices2 = parse_indices(f2);
 
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices0.0],
-                    normal: temp_normals[indices0.1],
-                });
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices1.0],
-                    normal: temp_normals[indices1.1],
-                });
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices2.0],
-                    normal: temp_normals[indices2.1],
-                });
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices0.0],
+                    temp_normals[indices0.1],
+                ));
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices1.0],
+                    temp_normals[indices1.1],
+                ));
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices2.0],
+                    temp_normals[indices2.1],
+                ));
             }
             ["f", f0, f1, f2, f3] => {
                 let indices0 = parse_indices(f0);
@@ -58,31 +69,31 @@ pub fn load_model(model_content: &str) -> Model {
                 let indices2 = parse_indices(f2);
                 let indices3 = parse_indices(f3);
 
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices0.0],
-                    normal: temp_normals[indices0.1],
-                });
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices1.0],
-                    normal: temp_normals[indices1.1],
-                });
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices2.0],
-                    normal: temp_normals[indices2.1],
-                });
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices0.0],
+                    temp_normals[indices0.1],
+                ));
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices1.0],
+                    temp_normals[indices1.1],
+                ));
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices2.0],
+                    temp_normals[indices2.1],
+                ));
 
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices0.0],
-                    normal: temp_normals[indices0.1],
-                });
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices2.0],
-                    normal: temp_normals[indices2.1],
-                });
-                model.vertices.push(Vertex {
-                    position: temp_vertices[indices3.0],
-                    normal: temp_normals[indices3.1],
-                });
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices0.0],
+                    temp_normals[indices0.1],
+                ));
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices2.0],
+                    temp_normals[indices2.1],
+                ));
+                model.vertices.push(Vertex::new(
+                    temp_vertices[indices3.0],
+                    temp_normals[indices3.1],
+                ));
             }
             _ => {}
         }

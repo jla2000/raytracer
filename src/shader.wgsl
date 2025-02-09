@@ -25,8 +25,10 @@ struct PushConstants {
 }
 
 struct Vertex {
-  position: vec4f,
-  normal: vec4f,
+  position: vec3f,
+  _pad0: f32,
+  normal: vec3f,
+  _pad1: f32,
 }
 
 fn sky_color(ray_desc: RayDesc) -> vec3f {
@@ -47,9 +49,9 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
 
   for (var i = 0; i < 10; i++) {
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-      let n0 = vertices[intersection.primitive_index * 3 + 0].normal.xyz;
-      let n1 = vertices[intersection.primitive_index * 3 + 1].normal.xyz;
-      let n2 = vertices[intersection.primitive_index * 3 + 2].normal.xyz;
+      let n0 = vertices[intersection.primitive_index * 3 + 0].normal;
+      let n1 = vertices[intersection.primitive_index * 3 + 1].normal;
+      let n2 = vertices[intersection.primitive_index * 3 + 2].normal;
 
       let u = intersection.barycentrics.x;
       let v = intersection.barycentrics.y;
