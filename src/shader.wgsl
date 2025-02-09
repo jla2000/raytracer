@@ -51,7 +51,11 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
       let n1 = vertices[intersection.primitive_index * 3 + 1].normal.xyz;
       let n2 = vertices[intersection.primitive_index * 3 + 2].normal.xyz;
 
-      let normal = (n0 + n1 + n2) / 3.0;
+      let u = intersection.barycentrics.x;
+      let v = intersection.barycentrics.y;
+      let w = 1.0 - u - v;
+
+      let normal = normalize(w * n0 + u * n1 + v * n2);
 
       ray.origin = ray.origin + ray.dir * intersection.t;
       ray.dir = normalize(normal + random_on_hemisphere(normal));
