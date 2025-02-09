@@ -53,27 +53,36 @@ pub fn load_model(model_content: &str) -> Model {
                 });
             }
             ["f", f0, f1, f2, f3] => {
-                todo!()
-                // let face0 = parse_face(f0);
-                // let face1 = parse_face(f1);
-                // let face2 = parse_face(f2);
-                // let face3 = parse_face(f3);
-                //
-                // model.vertex_indices.push(face0.0);
-                // model.vertex_indices.push(face1.0);
-                // model.vertex_indices.push(face2.0);
-                //
-                // model.vertex_indices.push(face0.0);
-                // model.vertex_indices.push(face2.0);
-                // model.vertex_indices.push(face3.0);
-                //
-                // model.normal_indices.push(face0.1);
-                // model.normal_indices.push(face1.1);
-                // model.normal_indices.push(face2.1);
-                //
-                // model.normal_indices.push(face0.1);
-                // model.normal_indices.push(face2.1);
-                // model.normal_indices.push(face3.1);
+                let indices0 = parse_indices(f0);
+                let indices1 = parse_indices(f1);
+                let indices2 = parse_indices(f2);
+                let indices3 = parse_indices(f3);
+
+                model.vertices.push(Vertex {
+                    position: temp_vertices[indices0.0],
+                    normal: temp_normals[indices0.1],
+                });
+                model.vertices.push(Vertex {
+                    position: temp_vertices[indices1.0],
+                    normal: temp_normals[indices1.1],
+                });
+                model.vertices.push(Vertex {
+                    position: temp_vertices[indices2.0],
+                    normal: temp_normals[indices2.1],
+                });
+
+                model.vertices.push(Vertex {
+                    position: temp_vertices[indices0.0],
+                    normal: temp_normals[indices0.1],
+                });
+                model.vertices.push(Vertex {
+                    position: temp_vertices[indices2.0],
+                    normal: temp_normals[indices2.1],
+                });
+                model.vertices.push(Vertex {
+                    position: temp_vertices[indices3.0],
+                    normal: temp_normals[indices3.1],
+                });
             }
             _ => {}
         }
