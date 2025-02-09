@@ -20,9 +20,16 @@ mod camera;
 mod model;
 
 struct App {
-    state: Option<(Arc<Window>, Renderer, Camera, MouseDrag)>,
+    state: Option<State>,
     counter: FpsCounter,
     time_since_start: Instant,
+}
+
+struct State {
+    window: Arc<Window>,
+    renderer: Renderer,
+    camera: Camera,
+    mouse_drag: MouseDrag,
 }
 
 struct FpsCounter {
@@ -92,7 +99,12 @@ impl ApplicationHandler for App {
             last_y_position: 0.0,
         };
 
-        self.state = Some((window, renderer, camera, mouse_drag));
+        self.state = Some(State {
+            window,
+            renderer,
+            camera,
+            mouse_drag,
+        });
     }
 
     fn window_event(
@@ -101,7 +113,13 @@ impl ApplicationHandler for App {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        if let Some((window, renderer, camera, mouse_drag)) = &mut self.state {
+        if let Some(State {
+            window,
+            renderer,
+            camera,
+            mouse_drag,
+        }) = &mut self.state
+        {
             match event {
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::RedrawRequested => {
