@@ -37,6 +37,7 @@ struct FpsCounter {
     num_frames: usize,
 }
 
+#[derive(Default)]
 struct MouseDrag {
     is_dragging: bool,
     last_x_position: f32,
@@ -93,17 +94,11 @@ impl ApplicationHandler for App {
             &camera.calculate_projection(&window_size),
         );
 
-        let mouse_drag = MouseDrag {
-            is_dragging: false,
-            last_x_position: 0.0,
-            last_y_position: 0.0,
-        };
-
         self.state = Some(State {
             window,
             renderer,
             camera,
-            mouse_drag,
+            mouse_drag: MouseDrag::default(),
         });
     }
 
@@ -120,6 +115,8 @@ impl ApplicationHandler for App {
             mouse_drag,
         }) = &mut self.state
         {
+            let mut update_camera = false;
+
             match event {
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::RedrawRequested => {
@@ -145,12 +142,7 @@ impl ApplicationHandler for App {
                         let delta_x = position.x as f32 - mouse_drag.last_x_position;
                         let delta_y = position.y as f32 - mouse_drag.last_y_position;
                         camera.update_angles(delta_x, delta_y);
-
-                        let window_size = window.inner_size();
-                        renderer.update_camera(
-                            &camera.calculate_view(),
-                            &camera.calculate_projection(&window_size),
-                        );
+                        update_camera = true;
                     }
                     mouse_drag.last_x_position = position.x as f32;
                     mouse_drag.last_y_position = position.y as f32;
@@ -160,13 +152,17 @@ impl ApplicationHandler for App {
                     ..
                 } => {
                     camera.zoom(scroll_y);
-                    let window_size = window.inner_size();
-                    renderer.update_camera(
-                        &camera.calculate_view(),
-                        &camera.calculate_projection(&window_size),
-                    );
+                    update_camera = true;
                 }
                 _ => {}
+            }
+
+            if update_camera {
+                let window_size = window.inner_size();
+                renderer.update_camera(
+                    &camera.calculate_view(),
+                    &camera.calculate_projection(&window_size),
+                );
             }
         }
     }
