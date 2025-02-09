@@ -3,11 +3,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+use camera::Camera;
 use glam::{Mat4, Vec3};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::WindowEvent,
+    event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{self, ControlFlow, EventLoop},
     window::{Window, WindowAttributes},
 };
@@ -15,10 +16,11 @@ use winit::{
 mod renderer;
 use renderer::*;
 
+mod camera;
 mod model;
 
 struct App {
-    state: Option<(Arc<Window>, Renderer)>,
+    state: Option<(Arc<Window>, Renderer, Camera, MouseDrag)>,
     counter: FpsCounter,
     time_since_start: Instant,
 }
@@ -26,6 +28,12 @@ struct App {
 struct FpsCounter {
     last_frame: Instant,
     num_frames: usize,
+}
+
+struct MouseDrag {
+    is_dragging: bool,
+    last_x_position: f32,
+    last_y_position: f32,
 }
 
 impl Default for FpsCounter {
@@ -71,19 +79,20 @@ impl ApplicationHandler for App {
         let window_size = window.inner_size();
 
         let mut renderer = pollster::block_on(Renderer::new(window.clone()));
+        let camera = Camera::new(Vec3::ZERO, 3.0);
 
-        let position = Vec3::new(1.5, 1.0, 2.5);
-        let projection = Mat4::perspective_lh(
-            90.0f32.to_radians(),
-            window_size.width as f32 / window_size.height as f32,
-            0.1,
-            100.0,
+        renderer.update_camera(
+            &camera.calculate_view(),
+            &camera.calculate_projection(&window_size),
         );
-        let view = Mat4::look_at_lh(position, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
 
-        renderer.update_camera(&view, &projection);
+        let mouse_drag = MouseDrag {
+            is_dragging: false,
+            last_x_position: 0.0,
+            last_y_position: 0.0,
+        };
 
-        self.state = Some((window, renderer));
+        self.state = Some((window, renderer, camera, mouse_drag));
     }
 
     fn window_event(
@@ -92,10 +101,10 @@ impl ApplicationHandler for App {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::RedrawRequested => {
-                if let Some((window, renderer)) = &mut self.state {
+        if let Some((window, renderer, camera, mouse_drag)) = &mut self.state {
+            match event {
+                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::RedrawRequested => {
                     let num_samples = renderer
                         .render(self.time_since_start.elapsed().as_secs_f32())
                         .unwrap();
@@ -106,8 +115,41 @@ impl ApplicationHandler for App {
                             .set_title(&format!("raytracer - FPS: {fps}, Samples: {num_samples}"));
                     }
                 }
+                WindowEvent::MouseInput {
+                    state,
+                    button: MouseButton::Left,
+                    ..
+                } => {
+                    mouse_drag.is_dragging = state == ElementState::Pressed;
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    if mouse_drag.is_dragging {
+                        let delta_x = position.x as f32 - mouse_drag.last_x_position;
+                        let delta_y = position.y as f32 - mouse_drag.last_y_position;
+                        camera.update_angles(delta_x, delta_y);
+
+                        let window_size = window.inner_size();
+                        renderer.update_camera(
+                            &camera.calculate_view(),
+                            &camera.calculate_projection(&window_size),
+                        );
+                    }
+                    mouse_drag.last_x_position = position.x as f32;
+                    mouse_drag.last_y_position = position.y as f32;
+                }
+                WindowEvent::MouseWheel {
+                    delta: MouseScrollDelta::LineDelta(_, scroll_y),
+                    ..
+                } => {
+                    camera.zoom(scroll_y);
+                    let window_size = window.inner_size();
+                    renderer.update_camera(
+                        &camera.calculate_view(),
+                        &camera.calculate_projection(&window_size),
+                    );
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
 }
