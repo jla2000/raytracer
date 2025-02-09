@@ -47,7 +47,6 @@ pub fn load_model(model_content: &str) -> Model {
                 n2.parse().unwrap(),
             )),
             ["usemtl", material_name] => {
-                dbg!(material_name);
                 temp_material_num = match material_name {
                     &"BMW_E30_M3_WINDOWS" => 1,
                     &"BMW_E30_M3_CHROME" => 1,

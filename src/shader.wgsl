@@ -10,6 +10,9 @@ var acc_struct: acceleration_structure;
 @group(0) @binding(3)
 var<storage, read> vertices: array<Vertex>;
 
+@group(0) @binding(4)
+var noise_array: texture_storage_2d_array<rgba32float, read>;
+
 var<push_constant> push_constants: PushConstants;
 
 var<private> rng_state: u32;
@@ -36,7 +39,7 @@ fn sky_color(ray_desc: RayDesc) -> vec3f {
   return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0);
 }
 
-fn trace_ray(ray_desc: RayDesc) -> vec3f {
+fn trace_ray(ray_desc: RayDesc, gid: vec3u) -> vec3f {
   var ray = ray_desc;
   var color = sky_color(ray);
 
@@ -47,7 +50,7 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
 
   var intersection = rayQueryGetCommittedIntersection(&ray_query);
 
-  for (var i = 0; i < 10; i++) {
+  for (var i = 0u; i < 10; i++) {
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
       let n0 = vertices[intersection.primitive_index * 3 + 0].normal;
       let n1 = vertices[intersection.primitive_index * 3 + 1].normal;
@@ -64,7 +67,7 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
       if (material != 0) {
         ray.dir = reflect(ray.dir, normal);
       } else {
-        ray.dir = normalize(normal + random_on_hemisphere(normal));
+        ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
       }
       color *= 0.5;
 
@@ -77,7 +80,7 @@ fn trace_ray(ray_desc: RayDesc) -> vec3f {
         let normal = vec3(0.0, 1.0, 0.0);
 
         ray.origin = ray.origin + ray.dir * t;
-        ray.dir = normalize(normal + random_on_hemisphere(normal));
+        ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
         color *= 0.4;
 
         rayQueryInitialize(&ray_query, acc_struct, ray);
@@ -105,12 +108,16 @@ fn rand_float() -> f32 {
   return f32(rand_wang()) / pow(2.0, 32.0);
 }
 
-fn random_unit_vec() -> vec3f {
-  return normalize((vec3f(rand_float(), rand_float(), rand_float()) - 0.5) * 2);
+const PI: f32 = 3.14159265359;
+
+fn random_unit_vec(gid: vec3u, offset: u32) -> vec3f {
+  let noise_size = vec3(textureDimensions(noise_array), textureNumLayers(noise_array));
+  let random_offset = (vec3(gid.xy, offset) + rng_state) % noise_size;
+  return normalize(textureLoad(noise_array, random_offset.xy, random_offset.z).rgb);
 }
 
-fn random_on_hemisphere(normal: vec3f) -> vec3f {
-  let rand = random_unit_vec();
+fn random_on_hemisphere(gid: vec3u, offset: u32, normal: vec3f) -> vec3f {
+  let rand = random_unit_vec(gid, offset);
   if (dot(rand, normal) > 0.0) {
     return rand;
   } else {
@@ -146,7 +153,7 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
     100.0,
     origin_world_space.xyz,
     direction_world_space.xyz
-  ));
+  ), gid);
 
   let accumulated_color = textureLoad(render_texture, gid.xy).xyz;
   let mixed_color = mix(accumulated_color, ray_color, 1 / (f32(push_constants.num_samples) + 1));

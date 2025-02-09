@@ -1,11 +1,12 @@
-use std::{num::NonZero, sync::Arc};
+use std::{io::Cursor, num::NonZero, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
+use image::{EncodableLayout, ImageFormat, ImageReader};
 use wgpu::{
     hal::AccelerationStructureGeometryFlags,
     include_wgsl,
-    util::{BufferInitDescriptor, DeviceExt},
+    util::{BufferInitDescriptor, DeviceExt, TextureDataOrder},
     AccelerationStructureFlags, AccelerationStructureUpdateMode, Backends, BindGroup,
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
@@ -160,6 +161,16 @@ impl Renderer {
                     },
                     count: None,
                 },
+                BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        format: TextureFormat::Rgba32Float,
+                        view_dimension: TextureViewDimension::D2Array,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -260,6 +271,51 @@ impl Renderer {
         );
         queue.submit(std::iter::once(encoder.finish()));
 
+        let noise_images = vec![
+            include_bytes!("../noise/HDR_RGBA_0.png"),
+            include_bytes!("../noise/HDR_RGBA_1.png"),
+            include_bytes!("../noise/HDR_RGBA_2.png"),
+            include_bytes!("../noise/HDR_RGBA_4.png"),
+            include_bytes!("../noise/HDR_RGBA_5.png"),
+            include_bytes!("../noise/HDR_RGBA_6.png"),
+            include_bytes!("../noise/HDR_RGBA_7.png"),
+        ];
+
+        let mut noise_buffer = Vec::new();
+
+        for noise_image in &noise_images {
+            let mut reader = ImageReader::new(Cursor::new(noise_image));
+            reader.set_format(ImageFormat::Png);
+
+            let decoded = reader.decode().unwrap();
+            let formmatted = decoded.to_rgba32f();
+            noise_buffer.extend_from_slice(formmatted.as_bytes());
+        }
+
+        let noise_texture = device.create_texture_with_data(
+            &queue,
+            &TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: 256,
+                    height: 256,
+                    depth_or_array_layers: noise_images.len() as u32,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba32Float,
+                usage: TextureUsages::STORAGE_BINDING,
+                view_formats: &[],
+            },
+            TextureDataOrder::MipMajor,
+            noise_buffer.as_bytes(),
+        );
+        let noise_texture_view = noise_texture.create_view(&TextureViewDescriptor {
+            dimension: Some(TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &bind_group_layout,
@@ -279,6 +335,10 @@ impl Renderer {
                 BindGroupEntry {
                     binding: 3,
                     resource: BindingResource::Buffer(vertex_buffer.as_entire_buffer_binding()),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: BindingResource::TextureView(&noise_texture_view),
                 },
             ],
         });
