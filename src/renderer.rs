@@ -1,34 +1,30 @@
-use std::{
-    io::{Cursor, Write},
-    num::NonZero,
-    sync::Arc,
-};
+use std::{num::NonZero, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
-use image::{EncodableLayout, ImageFormat, ImageReader};
+use glam::Mat4;
 use wgpu::{
     hal::AccelerationStructureGeometryFlags,
     include_wgsl,
-    util::{BufferInitDescriptor, DeviceExt, TextureDataOrder},
+    util::{BufferInitDescriptor, DeviceExt},
     AccelerationStructureFlags, AccelerationStructureUpdateMode, Backends, BindGroup,
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
     BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, CompositeAlphaMode,
     ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, CreateBlasDescriptor,
-    CreateTlasDescriptor, Device, DeviceDescriptor, Extent3d, Features, IndexFormat, Instance,
+    CreateTlasDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
     InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
-    PresentMode, PushConstantRange, Queue, RequestAdapterOptions, ShaderStages,
+    PresentMode, PushConstantRange, Queue, RequestAdapterOptions, SamplerBindingType, ShaderStages,
     StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
-    TlasInstance, TlasPackage, VertexFormat,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
+    TextureViewDimension, TlasInstance, TlasPackage, VertexFormat,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
     model::{load_model, Vertex},
     noise::load_noise,
+    skybox::load_skybox,
 };
 
 const CAMERA_BUFFER_SIZE: usize = 128;
@@ -129,6 +125,8 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
+        let skybox_texture_view = load_skybox(&device, &queue);
+
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -175,6 +173,16 @@ impl Renderer {
                         access: StorageTextureAccess::ReadOnly,
                         format: TextureFormat::Rgba32Float,
                         view_dimension: TextureViewDimension::D2Array,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        format: TextureFormat::Rgba32Float,
+                        view_dimension: TextureViewDimension::D2,
                     },
                     count: None,
                 },
@@ -302,6 +310,10 @@ impl Renderer {
                 BindGroupEntry {
                     binding: 4,
                     resource: BindingResource::TextureView(&noise_texture_view),
+                },
+                BindGroupEntry {
+                    binding: 5,
+                    resource: BindingResource::TextureView(&skybox_texture_view),
                 },
             ],
         });

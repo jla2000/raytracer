@@ -13,9 +13,14 @@ var<storage, read> vertices: array<Vertex>;
 @group(0) @binding(4)
 var noise_array: texture_storage_2d_array<rgba32float, read>;
 
+@group(0) @binding(5)
+var skybox_texture: texture_storage_2d<rgba32float, read>;
+
 var<push_constant> push_constants: PushConstants;
 
 var<private> rng_state: u32;
+
+const PI: f32 = 3.14159265359;
 
 struct CameraMatrices {
   inverse_proj: mat4x4<f32>,
@@ -35,13 +40,20 @@ struct Vertex {
 }
 
 fn sky_color(ray_desc: RayDesc) -> vec3f {
-  let a = 0.5 * (ray_desc.dir.y + 1.0);
-  return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0);
+  let theta = atan2(ray_desc.dir.z, ray_desc.dir.x);
+  let phi = acos(ray_desc.dir.y);
+
+  let u = (theta + PI) / (2*PI);
+  let v = phi / PI;
+
+  let pos = vec2f(textureDimensions(skybox_texture).xy) * vec2f(u, v);
+
+  return textureLoad(skybox_texture, vec2u(pos)).rgb;
 }
 
 fn trace_ray(ray_desc: RayDesc, gid: vec3u) -> vec3f {
   var ray = ray_desc;
-  var color = sky_color(ray);
+  var color = vec3f(1, 1, 1);
 
   var ray_query: ray_query;
 
@@ -75,20 +87,22 @@ fn trace_ray(ray_desc: RayDesc, gid: vec3u) -> vec3f {
       rayQueryProceed(&ray_query);
       intersection = rayQueryGetCommittedIntersection(&ray_query);
     } else {
-      if ray.dir.y < 0.0 {
-        let t = -ray.origin.y / ray.dir.y;
-        let normal = vec3(0.0, 1.0, 0.0);
+      //if ray.dir.y < 0.0 {
+      //  let t = -ray.origin.y / ray.dir.y;
+      //  let normal = vec3(0.0, 1.0, 0.0);
 
-        ray.origin = ray.origin + ray.dir * t;
-        ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
-        color *= 0.4;
+      //  ray.origin = ray.origin + ray.dir * t;
+      //  ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
+      //  color *= 0.4;
 
-        rayQueryInitialize(&ray_query, acc_struct, ray);
-        rayQueryProceed(&ray_query);
-        intersection = rayQueryGetCommittedIntersection(&ray_query);
-      } else {
-        break;
-      }
+      //  rayQueryInitialize(&ray_query, acc_struct, ray);
+      //  rayQueryProceed(&ray_query);
+      //  intersection = rayQueryGetCommittedIntersection(&ray_query);
+      //} else {
+      //  break;
+      //}
+      color *= sky_color(ray);
+      break;
     }
   }
 
@@ -107,8 +121,6 @@ fn rand_wang() -> u32 {
 fn rand_float() -> f32 {
   return f32(rand_wang()) / pow(2.0, 32.0);
 }
-
-const PI: f32 = 3.14159265359;
 
 fn random_unit_vec(gid: vec3u, offset: u32) -> vec3f {
   let noise_size = vec3(textureDimensions(noise_array), textureNumLayers(noise_array));

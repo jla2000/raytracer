@@ -19,6 +19,7 @@ use renderer::*;
 mod camera;
 mod model;
 mod noise;
+mod skybox;
 
 struct App {
     state: Option<State>,
