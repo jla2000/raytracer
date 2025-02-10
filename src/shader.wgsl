@@ -68,6 +68,7 @@ fn trace_ray(ray_desc: RayDesc, gid: vec3u) -> vec3f {
       if intersection.t < 0.001 {
         break;
       }
+
       let n0 = vertices[intersection.primitive_index * 3 + 0].normal;
       let n1 = vertices[intersection.primitive_index * 3 + 1].normal;
       let n2 = vertices[intersection.primitive_index * 3 + 2].normal;
@@ -84,29 +85,29 @@ fn trace_ray(ray_desc: RayDesc, gid: vec3u) -> vec3f {
         ray.dir = reflect(ray.dir, normal);
       } else {
         ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
+        color *= 0.5;
       }
-      color *= 0.5;
 
       rayQueryInitialize(&ray_query, acc_struct, ray);
       rayQueryProceed(&ray_query);
       intersection = rayQueryGetCommittedIntersection(&ray_query);
     } else {
-      //if ray.dir.y < 0.0 {
-      //  let t = -ray.origin.y / ray.dir.y;
-      //  let normal = vec3(0.0, 1.0, 0.0);
+      if ray.dir.y < 0.0 {
+        let t = -ray.origin.y / ray.dir.y;
+        let normal = vec3(0.0, 1.0, 0.0);
 
-      //  ray.origin = ray.origin + ray.dir * t;
-      //  ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
-      //  color *= 0.4;
+        color *= sky_color(ray);
 
-      //  rayQueryInitialize(&ray_query, acc_struct, ray);
-      //  rayQueryProceed(&ray_query);
-      //  intersection = rayQueryGetCommittedIntersection(&ray_query);
-      //} else {
-      //  break;
-      //}
-      color *= sky_color(ray);
-      break;
+        ray.origin = ray.origin + ray.dir * t;
+        ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
+
+        rayQueryInitialize(&ray_query, acc_struct, ray);
+        rayQueryProceed(&ray_query);
+        intersection = rayQueryGetCommittedIntersection(&ray_query);
+      } else {
+        color *= sky_color(ray);
+        break;
+      }
     }
   }
 
@@ -163,14 +164,14 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
   let direction_view_space = normalize(camera.inverse_proj * vec4(ndc, 0.0, 1.0));
   let direction_world_space = normalize(camera.inverse_view * vec4(direction_view_space.xyz, 0));
 
-  let ray_color = trace_ray(RayDesc(
+  let ray_color = min(trace_ray(RayDesc(
     0,
     0xff,
     0.1,
     100.0,
     origin_world_space.xyz,
     direction_world_space.xyz
-  ), gid);
+  ), gid), vec3f(1, 1, 1));
 
   let accumulated_color = textureLoad(render_texture, gid.xy).xyz;
   let mixed_color = mix(accumulated_color, ray_color, 1 / (f32(push_constants.num_samples) + 1));
