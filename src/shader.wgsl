@@ -63,7 +63,11 @@ fn trace_ray(ray_desc: RayDesc, gid: vec3u) -> vec3f {
   var intersection = rayQueryGetCommittedIntersection(&ray_query);
 
   for (var i = 0u; i < 10; i++) {
+    rng_state += i * 2351341;
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
+      if intersection.t < 0.001 {
+        break;
+      }
       let n0 = vertices[intersection.primitive_index * 3 + 0].normal;
       let n1 = vertices[intersection.primitive_index * 3 + 1].normal;
       let n2 = vertices[intersection.primitive_index * 3 + 2].normal;
@@ -124,8 +128,9 @@ fn rand_float() -> f32 {
 
 fn random_unit_vec(gid: vec3u, offset: u32) -> vec3f {
   let noise_size = vec3(textureDimensions(noise_array), textureNumLayers(noise_array));
-  let random_offset = (vec3(gid.xy, offset) + rng_state) % noise_size;
+  let random_offset = (vec3(gid.xy, offset) + vec3(rand_wang(), rand_wang(), rand_wang())) % noise_size;
   return normalize(textureLoad(noise_array, random_offset.xy, random_offset.z).rgb);
+  //return normalize(vec3(rand_float(), rand_float(), rand_float()));
 }
 
 fn random_on_hemisphere(gid: vec3u, offset: u32, normal: vec3f) -> vec3f {

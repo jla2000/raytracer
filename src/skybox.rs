@@ -8,7 +8,7 @@ use wgpu::{
 };
 
 pub fn load_skybox(device: &Device, queue: &Queue) -> TextureView {
-    let skybox_bytes = include_bytes!("../rosendal_plains_2_4k.hdr");
+    let skybox_bytes = include_bytes!("../zwartkops_straight_afternoon_4k.hdr");
     let reader = ImageReader::with_format(Cursor::new(skybox_bytes), ImageFormat::Hdr);
     let image = reader.decode().unwrap();
     let image_formatted = image.to_rgba32f();
