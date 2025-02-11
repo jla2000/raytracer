@@ -47,19 +47,19 @@ pub fn load_model(model_content: &str) -> Model {
                 n2.parse().unwrap(),
             )),
             ["usemtl", material_name] => {
-                temp_material_num = match material_name {
-                    &"BMW_E30_M3_WINDOWS" => 1,
-                    &"BMW_E30_M3_CHROME" => 1,
-                    &"BMW_E30_M3_LENS" => 1,
-                    &"BMW_E30_M3_SIDE_MIRROR" => 1,
-                    &"BMW_E30_M3_RIM" => 1,
-                    &"BMW_E30_M3_EMBLEMS" => 1,
-                    &"BMW_E30_M3_HEADLIGHT_REFLECTOR" => 1,
-                    &"BMW_E30_M3_TAILLIGHT_REFLECTOR" => 1,
-                    &"BMW_E30_M3_PLASTIC" => 1,
-                    &"Brake_Disc" => 1,
-                    &"Brembo_Calipers" => 1,
-                    &"Logo_Plane" => 1,
+                temp_material_num = match *material_name {
+                    "BMW_E30_M3_WINDOWS" => 1,
+                    "BMW_E30_M3_CHROME" => 1,
+                    "BMW_E30_M3_LENS" => 1,
+                    "BMW_E30_M3_SIDE_MIRROR" => 1,
+                    "BMW_E30_M3_RIM" => 1,
+                    "BMW_E30_M3_EMBLEMS" => 1,
+                    "BMW_E30_M3_HEADLIGHT_REFLECTOR" => 1,
+                    "BMW_E30_M3_TAILLIGHT_REFLECTOR" => 1,
+                    "BMW_E30_M3_PLASTIC" => 1,
+                    "Brake_Disc" => 1,
+                    "Brembo_Calipers" => 1,
+                    "Logo_Plane" => 1,
                     _ => 0,
                 };
             }

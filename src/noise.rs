@@ -9,13 +9,13 @@ use wgpu::{
 
 pub fn load_noise(queue: &Queue, device: &Device) -> TextureView {
     let noise_images = [
-        include_bytes!("../noise/HDR_RGBA_0.png"),
-        include_bytes!("../noise/HDR_RGBA_1.png"),
-        include_bytes!("../noise/HDR_RGBA_2.png"),
-        include_bytes!("../noise/HDR_RGBA_4.png"),
-        include_bytes!("../noise/HDR_RGBA_5.png"),
-        include_bytes!("../noise/HDR_RGBA_6.png"),
-        include_bytes!("../noise/HDR_RGBA_7.png"),
+        include_bytes!("../assets/blue_noise/HDR_RGBA_0.png"),
+        include_bytes!("../assets/blue_noise/HDR_RGBA_1.png"),
+        include_bytes!("../assets/blue_noise/HDR_RGBA_2.png"),
+        include_bytes!("../assets/blue_noise/HDR_RGBA_4.png"),
+        include_bytes!("../assets/blue_noise/HDR_RGBA_5.png"),
+        include_bytes!("../assets/blue_noise/HDR_RGBA_6.png"),
+        include_bytes!("../assets/blue_noise/HDR_RGBA_7.png"),
     ];
 
     let mut noise_buffer = Vec::new();
@@ -30,7 +30,7 @@ pub fn load_noise(queue: &Queue, device: &Device) -> TextureView {
     }
 
     let noise_texture = device.create_texture_with_data(
-        &queue,
+        queue,
         &TextureDescriptor {
             label: None,
             size: Extent3d {

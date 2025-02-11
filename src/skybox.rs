@@ -3,12 +3,12 @@ use std::io::Cursor;
 use image::{EncodableLayout, GenericImageView, ImageFormat, ImageReader};
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
-    AddressMode, Device, Extent3d, FilterMode, Queue, Sampler, SamplerDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    Device, Extent3d, Queue, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor,
 };
 
 pub fn load_skybox(device: &Device, queue: &Queue) -> TextureView {
-    let skybox_bytes = include_bytes!("../zwartkops_straight_afternoon_4k.hdr");
+    let skybox_bytes = include_bytes!("../assets/skybox/zwartkops_straight_afternoon_4k.hdr");
     let reader = ImageReader::with_format(Cursor::new(skybox_bytes), ImageFormat::Hdr);
     let image = reader.decode().unwrap();
     let image_formatted = image.to_rgba32f();
@@ -34,7 +34,5 @@ pub fn load_skybox(device: &Device, queue: &Queue) -> TextureView {
         image_formatted.as_bytes(),
     );
 
-    let texture_view = texture.create_view(&TextureViewDescriptor::default());
-
-    texture_view
+    texture.create_view(&TextureViewDescriptor::default())
 }

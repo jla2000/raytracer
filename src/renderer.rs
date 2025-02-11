@@ -14,10 +14,10 @@ use wgpu::{
     ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, CreateBlasDescriptor,
     CreateTlasDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
     InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
-    PresentMode, PushConstantRange, Queue, RequestAdapterOptions, SamplerBindingType, ShaderStages,
+    PresentMode, PushConstantRange, Queue, RequestAdapterOptions, ShaderStages,
     StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension, TlasInstance, TlasPackage, VertexFormat,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    TlasInstance, TlasPackage, VertexFormat,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -231,7 +231,7 @@ impl Renderer {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        let model = load_model(include_str!("../models/E30_Final01.obj"));
+        let model = load_model(include_str!("../assets/models/E30_Final01.obj"));
 
         let geometry_size = BlasTriangleGeometrySizeDescriptor {
             vertex_format: VertexFormat::Float32x3,
