@@ -21,7 +21,6 @@
         default = pkgs.mkShell rec {
           nativeBuildInputs = [
             rust-toolchain
-            # Needed for cross compilation to windows
             pkgs.pkgsCross.mingwW64.buildPackages.gcc
           ];
           buildInputs = with pkgs; [
@@ -36,8 +35,6 @@
           ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
           VK_LAYER_PATH = "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
-
-          # Fix pthreads for cross compilation for windows
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${pkgs.pkgsCross.mingwW64.windows.pthreads}/lib";
         };
       };
