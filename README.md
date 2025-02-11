@@ -2,11 +2,11 @@
 
 # `raytracer`
 
-[![Build status](https://github.com/jla2000/raytracer/actions/workflows/rust.yml/badge.svg)
+**A cross-platform ray tracer, using wgpu and written in rust.**
+
+![Build status](https://github.com/jla2000/raytracer/actions/workflows/rust.yml/badge.svg)
 
 </div>
-
-A cross-platform ray tracer, using wgpu and written in rust.
 
 ## Building
 
