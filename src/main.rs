@@ -13,13 +13,13 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
-mod renderer;
-use renderer::*;
+mod vulkan;
+use vulkan::*;
 
 mod camera;
-mod model;
-mod noise;
-mod skybox;
+//mod model;
+//mod noise;
+//mod skybox;
 
 struct App {
     state: Option<State>,
@@ -88,7 +88,7 @@ impl ApplicationHandler for App {
 
         let window_size = window.inner_size();
 
-        let mut renderer = pollster::block_on(Renderer::new(window.clone()));
+        let mut renderer = Renderer::new(window.clone(), event_loop);
         let camera = Camera::new(Vec3::ZERO, 3.0);
 
         renderer.update_camera(
@@ -122,9 +122,8 @@ impl ApplicationHandler for App {
             match event {
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::RedrawRequested => {
-                    let num_samples = renderer
-                        .render(self.time_since_start.elapsed().as_secs_f32())
-                        .unwrap();
+                    let num_samples =
+                        renderer.render(self.time_since_start.elapsed().as_secs_f32());
                     window.request_redraw();
 
                     if let Some(fps) = self.counter.get_fps() {
@@ -171,7 +170,7 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    env_logger::init_from_env(env_logger::Env::default().filter_or("RUST_LOG", "wgpu=error,info"));
+    env_logger::init_from_env(env_logger::Env::default().filter_or("RUST_LOG", "debug"));
 
     let event_loop = EventLoop::new().unwrap();
 

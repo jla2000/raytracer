@@ -14,14 +14,15 @@
         inherit system;
         overlays = [ (import rust-overlay) ];
       };
-      rust-toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
     in
     {
       devShells.${system} = rec {
         default = pkgs.mkShell rec {
-          nativeBuildInputs = [
-            rust-toolchain
-            pkgs.pkgsCross.mingwW64.buildPackages.gcc
+          nativeBuildInputs = with pkgs; [
+            (rust-bin.stable.latest.default.override {
+              targets = [ "x86_64-unknown-linux-gnu" "x86_64-pc-windows-gnu" ];
+            })
+            pkgsCross.mingwW64.buildPackages.gcc
           ];
           buildInputs = with pkgs; [
             vulkan-loader
@@ -35,6 +36,7 @@
           ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
           VK_LAYER_PATH = "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
+          SHADERC_LIB_DIR = "${pkgs.shaderc.lib}/lib";
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${pkgs.pkgsCross.mingwW64.windows.pthreads}/lib";
         };
       };
