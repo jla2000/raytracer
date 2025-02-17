@@ -6,16 +6,21 @@ use vulkano::{
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
         AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
     },
+    descriptor_set::{
+        allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
+    },
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures,
         Queue, QueueCreateInfo, QueueFlags,
     },
     format::Format,
-    image::{Image, ImageUsage},
+    image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
     instance::{Instance, InstanceCreateInfo},
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
         compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
-        ComputePipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+        ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
+        PipelineShaderStageCreateInfo,
     },
     swapchain::{
         self, PresentMode, Surface, SurfaceInfo, Swapchain, SwapchainCreateInfo,
@@ -41,8 +46,11 @@ mod cs {
             #version 460
 
             layout(local_size_x = 32, local_size_y = 32) in;
+            layout(binding = 0, location = 0, rgba8) uniform writeonly image2D output_texture;
 
-            void main() { }
+            void main() {
+                imageStore(output_texture, ivec2(gl_GlobalInvocationID.xy), vec4(1.0, 0.0, 0.0, 1.0));
+            }
         "
     }
 }
@@ -140,7 +148,7 @@ impl Renderer {
                 min_image_count: surface_capabilities.min_image_count.max(2),
                 image_extent: window_size.into(),
                 image_usage: ImageUsage::COLOR_ATTACHMENT,
-                image_format: Format::B8G8R8A8_UNORM,
+                image_format: Format::R8G8B8A8_UNORM,
                 present_mode: PresentMode::Immediate,
                 composite_alpha: surface_capabilities
                     .supported_composite_alpha
@@ -169,6 +177,38 @@ impl Renderer {
         )
         .unwrap();
 
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
+
+        let output_image = Image::new(
+            memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::R8G8B8A8_UNORM,
+                extent: [window_size.width, window_size.height, 1],
+                usage: ImageUsage::STORAGE | ImageUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let output_image_view = ImageView::new_default(output_image.clone()).unwrap();
+
+        let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+        let set = DescriptorSet::new(
+            descriptor_set_allocator.clone(),
+            layout.clone(),
+            [WriteDescriptorSet::image_view(0, output_image_view)],
+            [],
+        )
+        .unwrap();
+
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
             device.clone(),
             StandardCommandBufferAllocatorCreateInfo::default(),
@@ -182,7 +222,14 @@ impl Renderer {
 
         unsafe {
             command_buffer_builder
-                .bind_pipeline_compute(compute_pipeline)
+                .bind_pipeline_compute(compute_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Compute,
+                    compute_pipeline.layout().clone(),
+                    0,
+                    set,
+                )
                 .unwrap()
                 .dispatch([window_size.width / 32, window_size.height / 32, 1])
                 .unwrap();
