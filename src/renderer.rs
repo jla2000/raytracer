@@ -3,29 +3,19 @@ use std::{num::NonZero, sync::Arc};
 use bytemuck::{Pod, Zeroable};
 use glam::Mat4;
 use wgpu::{
-    hal::AccelerationStructureGeometryFlags,
-    include_wgsl,
-    util::{BufferInitDescriptor, DeviceExt},
-    AccelerationStructureFlags, AccelerationStructureUpdateMode, Backends, BindGroup,
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingResource, BindingType, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
-    BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, BufferBindingType,
-    BufferDescriptor, BufferUsages, CommandEncoderDescriptor, CompositeAlphaMode,
-    ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, CreateBlasDescriptor,
-    CreateTlasDescriptor, Device, DeviceDescriptor, Extent3d, Features, Instance,
-    InstanceDescriptor, Limits, MemoryHints, PipelineLayoutDescriptor, PowerPreference,
-    PresentMode, PushConstantRange, Queue, RequestAdapterOptions, ShaderStages,
-    StorageTextureAccess, Surface, SurfaceConfiguration, SurfaceError, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
-    TlasInstance, TlasPackage, VertexFormat,
+    include_wgsl, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
+    BufferBindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor,
+    CompositeAlphaMode, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
+    DeviceDescriptor, Extent3d, Features, Instance, InstanceDescriptor, Limits, MemoryHints,
+    PipelineLayoutDescriptor, PowerPreference, PresentMode, PushConstantRange, Queue,
+    RequestAdapterOptions, ShaderStages, StorageTextureAccess, Surface, SurfaceConfiguration,
+    SurfaceError, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureViewDescriptor, TextureViewDimension,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::{
-    model::{load_model, Vertex},
-    noise::load_noise,
-    skybox::load_skybox,
-};
+use crate::skybox::load_skybox;
 
 const CAMERA_BUFFER_SIZE: usize = 128;
 
@@ -34,13 +24,6 @@ const CAMERA_BUFFER_SIZE: usize = 128;
 struct CameraMatrices {
     inverse_proj: Mat4,
     inverse_view: Mat4,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable)]
-struct PushConstants {
-    time: f32,
-    num_samples: u32,
 }
 
 pub struct Renderer {
@@ -52,7 +35,7 @@ pub struct Renderer {
     bind_group: BindGroup,
     camera_buffer: Buffer,
     window_size: PhysicalSize<u32>,
-    num_samples: u32,
+    frame_id: u32,
 }
 
 impl Renderer {
@@ -85,11 +68,9 @@ impl Renderer {
                     label: None,
                     required_features: Features::BGRA8UNORM_STORAGE
                         | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | Features::PUSH_CONSTANTS
-                        | Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-                        | Features::EXPERIMENTAL_RAY_QUERY,
+                        | Features::PUSH_CONSTANTS,
                     required_limits: Limits {
-                        max_push_constant_size: size_of::<PushConstants>() as u32,
+                        max_push_constant_size: size_of::<u32>() as u32,
                         ..Default::default()
                     },
                     memory_hints: MemoryHints::default(),
@@ -134,7 +115,7 @@ impl Renderer {
                     binding: 0,
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::StorageTexture {
-                        access: StorageTextureAccess::ReadWrite,
+                        access: StorageTextureAccess::WriteOnly,
                         format: texture_format,
                         view_dimension: TextureViewDimension::D2,
                     },
@@ -143,46 +124,20 @@ impl Renderer {
                 BindGroupLayoutEntry {
                     binding: 1,
                     visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(NonZero::new(CAMERA_BUFFER_SIZE as u64).unwrap()),
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        format: TextureFormat::Rgba32Float,
+                        view_dimension: TextureViewDimension::D2,
                     },
                     count: None,
                 },
                 BindGroupLayoutEntry {
                     binding: 2,
                     visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::AccelerationStructure,
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::StorageTexture {
-                        access: StorageTextureAccess::ReadOnly,
-                        format: TextureFormat::Rgba32Float,
-                        view_dimension: TextureViewDimension::D2Array,
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::StorageTexture {
-                        access: StorageTextureAccess::ReadOnly,
-                        format: TextureFormat::Rgba32Float,
-                        view_dimension: TextureViewDimension::D2,
+                        min_binding_size: Some(NonZero::new(CAMERA_BUFFER_SIZE as u64).unwrap()),
                     },
                     count: None,
                 },
@@ -194,7 +149,7 @@ impl Renderer {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[PushConstantRange {
                 stages: ShaderStages::COMPUTE,
-                range: 0..(size_of::<PushConstants>() as u32),
+                range: 0..(size_of::<u32>() as u32),
             }],
         });
 
@@ -224,69 +179,6 @@ impl Renderer {
 
         let render_texture_view = render_texture.create_view(&TextureViewDescriptor::default());
 
-        let tlas = device.create_tlas(&CreateTlasDescriptor {
-            label: None,
-            max_instances: 1,
-            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
-        });
-
-        let model = load_model(include_str!("../assets/models/E30_Final01.obj"));
-
-        let geometry_size = BlasTriangleGeometrySizeDescriptor {
-            vertex_format: VertexFormat::Float32x3,
-            vertex_count: (model.vertices.len() / 3) as u32,
-            index_format: None,
-            index_count: None,
-            flags: AccelerationStructureGeometryFlags::OPAQUE,
-        };
-        let blas = device.create_blas(
-            &CreateBlasDescriptor {
-                label: None,
-                flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: AccelerationStructureUpdateMode::Build,
-            },
-            BlasGeometrySizeDescriptors::Triangles {
-                descriptors: vec![geometry_size.clone()],
-            },
-        );
-
-        let tlas_package = TlasPackage::new_with_instances(
-            tlas,
-            vec![Some(TlasInstance::new(
-                &blas,
-                Mat4::IDENTITY.to_cols_array()[..12].try_into().unwrap(),
-                0,
-                0xff,
-            ))],
-        );
-
-        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("vertex buffer"),
-            contents: bytemuck::cast_slice(&model.vertices),
-            usage: BufferUsages::BLAS_INPUT | BufferUsages::STORAGE,
-        });
-
-        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
-        encoder.build_acceleration_structures(
-            std::iter::once(&BlasBuildEntry {
-                blas: &blas,
-                geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
-                    size: &geometry_size,
-                    vertex_buffer: &vertex_buffer,
-                    first_vertex: 0,
-                    vertex_stride: size_of::<Vertex>() as u64,
-                    index_buffer: None,
-                    first_index: None,
-                    transform_buffer: None,
-                    transform_buffer_offset: None,
-                }]),
-            }),
-            std::iter::once(&tlas_package),
-        );
-        queue.submit(std::iter::once(encoder.finish()));
-
-        let noise_texture_view = load_noise(&queue, &device);
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &bind_group_layout,
@@ -297,23 +189,11 @@ impl Renderer {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Buffer(camera_buffer.as_entire_buffer_binding()),
+                    resource: BindingResource::TextureView(&skybox_texture_view),
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: tlas_package.as_binding(),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::Buffer(vertex_buffer.as_entire_buffer_binding()),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::TextureView(&noise_texture_view),
-                },
-                BindGroupEntry {
-                    binding: 5,
-                    resource: BindingResource::TextureView(&skybox_texture_view),
+                    resource: BindingResource::Buffer(camera_buffer.as_entire_buffer_binding()),
                 },
             ],
         });
@@ -327,7 +207,7 @@ impl Renderer {
             bind_group,
             camera_buffer,
             window_size,
-            num_samples: 0,
+            frame_id: 0,
         }
     }
 
@@ -340,7 +220,7 @@ impl Renderer {
                 inverse_proj: projection.inverse(),
             }),
         );
-        self.num_samples = 0;
+        self.frame_id = 0;
     }
 
     pub fn render(&mut self, time: f32) -> Result<u32, SurfaceError> {
@@ -357,13 +237,7 @@ impl Renderer {
 
         compute_pass.set_pipeline(&self.pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.set_push_constants(
-            0,
-            bytemuck::bytes_of(&PushConstants {
-                time,
-                num_samples: self.num_samples,
-            }),
-        );
+        compute_pass.set_push_constants(0, bytemuck::bytes_of(&self.frame_id));
         compute_pass.dispatch_workgroups(
             self.window_size.width / 10,
             self.window_size.height / 10,
@@ -381,8 +255,8 @@ impl Renderer {
         self.queue.submit(std::iter::once(encoder.finish()));
         surface_texture.present();
 
-        self.num_samples += 1;
+        self.frame_id += 1;
 
-        Ok(self.num_samples)
+        Ok(self.frame_id)
     }
 }

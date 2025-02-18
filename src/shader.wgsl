@@ -1,22 +1,13 @@
 @group(0) @binding(0)
-var render_texture: texture_storage_2d<bgra8unorm, read_write>;
+var render_texture: texture_storage_2d<bgra8unorm, write>;
 
 @group(0) @binding(1)
-var<uniform> camera: CameraMatrices;
-
-@group(0) @binding(2)
-var acc_struct: acceleration_structure;
-
-@group(0) @binding(3)
-var<storage, read> vertices: array<Vertex>;
-
-@group(0) @binding(4)
-var noise_array: texture_storage_2d_array<rgba32float, read>;
-
-@group(0) @binding(5)
 var skybox_texture: texture_storage_2d<rgba32float, read>;
 
-var<push_constant> push_constants: PushConstants;
+@group(0) @binding(2)
+var<uniform> camera: CameraMatrices;
+
+var<push_constant> frame_id: u32;
 
 var<private> rng_state: u32;
 
@@ -25,18 +16,6 @@ const PI: f32 = 3.14159265359;
 struct CameraMatrices {
   inverse_proj: mat4x4<f32>,
   inverse_view: mat4x4<f32>,
-}
-
-struct PushConstants {
-  time: f32,
-  num_samples: u32,
-}
-
-struct Vertex {
-  position: vec3f,
-  _pad0: f32,
-  normal: vec3f,
-  material: u32,
 }
 
 fn sky_color(ray_desc: RayDesc) -> vec3f {
@@ -51,65 +30,49 @@ fn sky_color(ray_desc: RayDesc) -> vec3f {
   return textureLoad(skybox_texture, vec2u(pos)).rgb;
 }
 
+fn hit_sphere(center: vec3f, radius: f32, ray: RayDesc) -> f32 {
+  let oc = center - ray.origin;
+  let a = dot(ray.dir, ray.dir);
+  let b = -2.0 * dot(ray.dir, oc);
+  let c = dot(oc, oc) - radius*radius;
+  let discriminant = b*b - 4*a*c;
+
+  if discriminant <= 0 {
+    return -1.0;
+  } else {
+    return (-b - sqrt(discriminant)) / 2.0 * a;
+  }
+}
+
+struct Sphere {
+  center: vec3f,
+  radius: f32,
+}
+
 fn trace_ray(ray_desc: RayDesc, gid: vec3u) -> vec3f {
-  var ray = ray_desc;
   var color = vec3f(1, 1, 1);
+  var ray = ray_desc;
 
-  var ray_query: ray_query;
+  let spheres = array(
+    Sphere(vec3f(0, 0, 0), 1.0)
+  );
 
-  rayQueryInitialize(&ray_query, acc_struct, ray);
-  rayQueryProceed(&ray_query);
+  for (var i = 0; i < 4; i++) {
+    let dist = hit_sphere(vec3f(0, 0, 0), 1.0, ray);
 
-  var intersection = rayQueryGetCommittedIntersection(&ray_query);
+    if (dist > 0.0) {
+      color *= 0.5;
 
-  for (var i = 0u; i < 10; i++) {
-    rng_state += i * 2351341;
-    if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-      if intersection.t < 0.001 {
-        break;
-      }
+      let hit = ray.origin + ray.dir * dist;
 
-      let n0 = vertices[intersection.primitive_index * 3 + 0].normal;
-      let n1 = vertices[intersection.primitive_index * 3 + 1].normal;
-      let n2 = vertices[intersection.primitive_index * 3 + 2].normal;
-      let material = vertices[intersection.primitive_index * 3].material;
-
-      let u = intersection.barycentrics.x;
-      let v = intersection.barycentrics.y;
-      let w = 1.0 - u - v;
-
-      let normal = normalize(w * n0 + u * n1 + v * n2);
-
-      ray.origin = ray.origin + ray.dir * intersection.t;
-      if (material != 0) {
-        ray.dir = reflect(ray.dir, normal);
-      } else {
-        ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
-        color *= 0.5;
-      }
-
-      rayQueryInitialize(&ray_query, acc_struct, ray);
-      rayQueryProceed(&ray_query);
-      intersection = rayQueryGetCommittedIntersection(&ray_query);
+      ray.origin = hit;
+      ray.dir = reflect(ray.dir, normalize(hit));
     } else {
-      if ray.dir.y < 0.0 {
-        let t = -ray.origin.y / ray.dir.y;
-        let normal = vec3(0.0, 1.0, 0.0);
-
-        color *= sky_color(ray);
-
-        ray.origin = ray.origin + ray.dir * t;
-        ray.dir = normalize(normal + random_on_hemisphere(gid, i, normal));
-
-        rayQueryInitialize(&ray_query, acc_struct, ray);
-        rayQueryProceed(&ray_query);
-        intersection = rayQueryGetCommittedIntersection(&ray_query);
-      } else {
-        color *= sky_color(ray);
-        break;
-      }
+      color *= sky_color(ray);
+      break;
     }
   }
+
 
   return color;
 }
@@ -128,10 +91,7 @@ fn rand_float() -> f32 {
 }
 
 fn random_unit_vec(gid: vec3u, offset: u32) -> vec3f {
-  let noise_size = vec3(textureDimensions(noise_array), textureNumLayers(noise_array));
-  let random_offset = (vec3(gid.xy, offset) + vec3(rand_wang(), rand_wang(), rand_wang())) % noise_size;
-  return normalize(textureLoad(noise_array, random_offset.xy, random_offset.z).rgb);
-  //return normalize(vec3(rand_float(), rand_float(), rand_float()));
+  return normalize(vec3(rand_float(), rand_float(), rand_float()));
 }
 
 fn random_on_hemisphere(gid: vec3u, offset: u32, normal: vec3f) -> vec3f {
@@ -150,7 +110,7 @@ fn gamma_correct(color: vec3f) -> vec3f {
 @compute
 @workgroup_size(10, 10, 1)
 fn render(@builtin(global_invocation_id) gid: vec3u) {
-  rng_state = (gid.x * 1973 + gid.y * 9277 + push_constants.num_samples * 26699) | 1;
+  rng_state = (gid.x * 1973 + gid.y * 9277 + frame_id * 26699) | 1;
 
   let render_texture_size = vec2f(textureDimensions(render_texture).xy);
   let pixel = vec2f(gid.xy) + vec2f(rand_float(), rand_float()) - 0.5;
@@ -173,7 +133,5 @@ fn render(@builtin(global_invocation_id) gid: vec3u) {
     direction_world_space.xyz
   ), gid), vec3f(1, 1, 1));
 
-  let accumulated_color = textureLoad(render_texture, gid.xy).xyz;
-  let mixed_color = mix(accumulated_color, ray_color, 1 / (f32(push_constants.num_samples) + 1));
-  textureStore(render_texture, gid.xy, vec4(mixed_color, 1.0));
+  textureStore(render_texture, gid.xy, vec4(ray_color, 1.0));
 }

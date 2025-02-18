@@ -78,7 +78,7 @@ impl ApplicationHandler for App {
             event_loop
                 .create_window(
                     WindowAttributes::default()
-                        .with_inner_size(PhysicalSize::new(1920, 1080))
+                        .with_inner_size(PhysicalSize::new(800, 600))
                         .with_resizable(false)
                         .with_title("raytracer"),
                 )

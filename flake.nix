@@ -24,6 +24,7 @@
             pkgs.pkgsCross.mingwW64.buildPackages.gcc
           ];
           buildInputs = with pkgs; [
+            stdenv.cc.cc
             vulkan-loader
             libxkbcommon
             wayland
