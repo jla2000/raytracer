@@ -10,8 +10,9 @@ use vulkano::{
         allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
     },
     device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures,
-        Queue, QueueCreateInfo, QueueFlags,
+        physical::{PhysicalDevice, PhysicalDeviceType},
+        Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo,
+        QueueFlags,
     },
     format::{Format, NumericFormat},
     image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
@@ -72,50 +73,21 @@ impl Renderer {
         )
         .unwrap();
 
-        let device_extensions = DeviceExtensions {
+        let required_extensions = DeviceExtensions {
             khr_swapchain: true,
-            //khr_acceleration_structure: true,
-            //khr_ray_tracing_pipeline: true,
             ..Default::default()
         };
 
-        let device_features = DeviceFeatures {
-            //ray_tracing_pipeline: true,
-            //acceleration_structure: true,
+        let required_features = DeviceFeatures {
             ..Default::default()
         };
 
-        let (physical_device, queue_family_index) = instance
-            .enumerate_physical_devices()
-            .unwrap()
-            .filter(|device| {
-                device.supported_extensions().contains(&device_extensions)
-                    && device.supported_features().contains(&device_features)
-            })
-            .filter_map(|device| {
-                device
-                    .queue_family_properties()
-                    .iter()
-                    .enumerate()
-                    .position(|(queue_index, queue_properties)| {
-                        queue_properties
-                            .queue_flags
-                            .contains(QueueFlags::GRAPHICS | QueueFlags::COMPUTE)
-                            && device
-                                .presentation_support(queue_index as u32, event_loop)
-                                .unwrap()
-                    })
-                    .map(|queue_index| (device, queue_index as u32))
-            })
-            .min_by_key(|(device, _)| match device.properties().device_type {
-                PhysicalDeviceType::DiscreteGpu => 0,
-                PhysicalDeviceType::IntegratedGpu => 1,
-                PhysicalDeviceType::VirtualGpu => 2,
-                PhysicalDeviceType::Cpu => 3,
-                PhysicalDeviceType::Other => 4,
-                _ => 5,
-            })
-            .unwrap();
+        let (physical_device, queue_family_index) = select_physical_device(
+            instance.clone(),
+            event_loop,
+            &required_extensions,
+            &required_features,
+        );
 
         log::info!(
             "Using device: {} (type: {:?})",
@@ -126,7 +98,7 @@ impl Renderer {
         let (device, mut queues) = Device::new(
             physical_device,
             DeviceCreateInfo {
-                enabled_extensions: device_extensions,
+                enabled_extensions: required_extensions,
                 queue_create_infos: vec![QueueCreateInfo {
                     queue_family_index,
                     ..Default::default()
@@ -146,16 +118,7 @@ impl Renderer {
             .surface_capabilities(&surface, SurfaceInfo::default())
             .unwrap();
 
-        let surface_formats = device
-            .physical_device()
-            .surface_formats(&surface, SurfaceInfo::default())
-            .unwrap();
-
-        let (surface_format, _) = surface_formats
-            .iter()
-            .find(|(format, _)| format.numeric_format_color() == Some(NumericFormat::SRGB))
-            .unwrap();
-
+        let surface_format = select_surface_format(device.clone(), &surface);
         log::info!("Using surface format: {surface_format:?}");
 
         let (swapchain, swapchain_images) = Swapchain::new(
@@ -165,7 +128,7 @@ impl Renderer {
                 min_image_count: surface_capabilities.min_image_count.max(2),
                 image_extent: window_size.into(),
                 image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSFER_DST,
-                image_format: *surface_format,
+                image_format: surface_format,
                 present_mode: PresentMode::Immediate,
                 composite_alpha: surface_capabilities
                     .supported_composite_alpha
@@ -286,6 +249,56 @@ impl Renderer {
 
         0
     }
+}
+
+fn select_physical_device(
+    instance: Arc<Instance>,
+    event_loop: &ActiveEventLoop,
+    required_extensions: &DeviceExtensions,
+    required_features: &DeviceFeatures,
+) -> (Arc<PhysicalDevice>, u32) {
+    instance
+        .enumerate_physical_devices()
+        .unwrap()
+        .filter(|device| {
+            device.supported_extensions().contains(required_extensions)
+                && device.supported_features().contains(required_features)
+        })
+        .filter_map(|device| {
+            device
+                .queue_family_properties()
+                .iter()
+                .enumerate()
+                .position(|(queue_index, queue_properties)| {
+                    queue_properties
+                        .queue_flags
+                        .contains(QueueFlags::GRAPHICS | QueueFlags::COMPUTE)
+                        && device
+                            .presentation_support(queue_index as u32, event_loop)
+                            .unwrap()
+                })
+                .map(|queue_index| (device, queue_index as u32))
+        })
+        .min_by_key(|(device, _)| match device.properties().device_type {
+            PhysicalDeviceType::DiscreteGpu => 0,
+            PhysicalDeviceType::IntegratedGpu => 1,
+            PhysicalDeviceType::VirtualGpu => 2,
+            PhysicalDeviceType::Cpu => 3,
+            PhysicalDeviceType::Other => 4,
+            _ => 5,
+        })
+        .unwrap()
+}
+
+fn select_surface_format(device: Arc<Device>, surface: &Surface) -> Format {
+    device
+        .physical_device()
+        .surface_formats(surface, SurfaceInfo::default())
+        .unwrap()
+        .iter()
+        .find(|(format, _)| format.numeric_format_color() == Some(NumericFormat::SRGB))
+        .unwrap()
+        .0
 }
 
 fn build_compute_command_buffer(
