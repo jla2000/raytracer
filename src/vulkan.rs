@@ -4,7 +4,8 @@ use glam::Mat4;
 use vulkano::{
     command_buffer::{
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
+        AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, CopyImageInfo,
+        PrimaryAutoCommandBuffer,
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
@@ -36,7 +37,7 @@ pub struct Renderer {
     queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
     swapchain_images: Vec<Arc<Image>>,
-    command_buffer: Arc<PrimaryAutoCommandBuffer>,
+    command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 }
 
 mod cs {
@@ -69,14 +70,14 @@ impl Renderer {
 
         let device_extensions = DeviceExtensions {
             khr_swapchain: true,
-            khr_acceleration_structure: true,
-            khr_ray_tracing_pipeline: true,
+            //khr_acceleration_structure: true,
+            //khr_ray_tracing_pipeline: true,
             ..Default::default()
         };
 
         let device_features = DeviceFeatures {
-            ray_tracing_pipeline: true,
-            acceleration_structure: true,
+            //ray_tracing_pipeline: true,
+            //acceleration_structure: true,
             ..Default::default()
         };
 
@@ -147,7 +148,7 @@ impl Renderer {
             SwapchainCreateInfo {
                 min_image_count: surface_capabilities.min_image_count.max(2),
                 image_extent: window_size.into(),
-                image_usage: ImageUsage::COLOR_ATTACHMENT,
+                image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSFER_DST,
                 image_format: Format::R8G8B8A8_UNORM,
                 present_mode: PresentMode::Immediate,
                 composite_alpha: surface_capabilities
@@ -213,36 +214,44 @@ impl Renderer {
             device.clone(),
             StandardCommandBufferAllocatorCreateInfo::default(),
         ));
-        let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
-            command_buffer_allocator,
-            queue_family_index,
-            CommandBufferUsage::MultipleSubmit,
-        )
-        .unwrap();
 
-        unsafe {
-            command_buffer_builder
-                .bind_pipeline_compute(compute_pipeline.clone())
-                .unwrap()
-                .bind_descriptor_sets(
-                    PipelineBindPoint::Compute,
-                    compute_pipeline.layout().clone(),
-                    0,
-                    set,
+        let command_buffers = swapchain_images
+            .iter()
+            .map(|image| {
+                let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+                    command_buffer_allocator.clone(),
+                    queue_family_index,
+                    CommandBufferUsage::MultipleSubmit,
                 )
-                .unwrap()
-                .dispatch([window_size.width / 32, window_size.height / 32, 1])
                 .unwrap();
-        }
 
-        let command_buffer = command_buffer_builder.build().unwrap();
+                unsafe {
+                    command_buffer_builder
+                        .bind_pipeline_compute(compute_pipeline.clone())
+                        .unwrap()
+                        .bind_descriptor_sets(
+                            PipelineBindPoint::Compute,
+                            compute_pipeline.layout().clone(),
+                            0,
+                            set.clone(),
+                        )
+                        .unwrap()
+                        .dispatch([window_size.width / 32, window_size.height / 32, 1])
+                        .unwrap()
+                        .copy_image(CopyImageInfo::images(output_image.clone(), image.clone()))
+                        .unwrap();
+                }
+
+                command_buffer_builder.build().unwrap()
+            })
+            .collect();
 
         Self {
             device,
             queue,
             swapchain,
             swapchain_images,
-            command_buffer,
+            command_buffers,
         }
     }
 
@@ -254,7 +263,10 @@ impl Renderer {
 
         sync::now(self.device.clone())
             .join(acquire_future)
-            .then_execute(self.queue.clone(), self.command_buffer.clone())
+            .then_execute(
+                self.queue.clone(),
+                self.command_buffers[image_index as usize].clone(),
+            )
             .unwrap()
             .then_swapchain_present(
                 self.queue.clone(),
