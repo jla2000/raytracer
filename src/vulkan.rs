@@ -29,13 +29,14 @@ use vulkano::{
     sync::{self, GpuFuture},
     VulkanLibrary,
 };
-use winit::{event_loop::ActiveEventLoop, window::Window};
+use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::Window};
 
 pub struct Renderer {
     device: Arc<Device>,
     queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
-    command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
+    compute_command_buffer: Arc<PrimaryAutoCommandBuffer>,
+    blit_command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 }
 
 mod compute {
@@ -52,13 +53,13 @@ mod vertex {
     }
 }
 
-// mod fragment {
-//     vulkano_shaders::shader! {
-//         ty: "fragment",
-//         path: "assets/shaders/post_processing.frag",
-//     }
-// }
-//
+mod fragment {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "assets/shaders/post_processing.frag",
+    }
+}
+
 impl Renderer {
     pub fn new(window: Arc<Window>, event_loop: &ActiveEventLoop) -> Self {
         let library = VulkanLibrary::new().unwrap();
@@ -217,7 +218,7 @@ impl Renderer {
         let output_image_view = ImageView::new_default(output_image.clone()).unwrap();
 
         let layout = compute_pipeline.layout().set_layouts().first().unwrap();
-        let set = DescriptorSet::new(
+        let descriptor_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
             layout.clone(),
             [WriteDescriptorSet::image_view(0, output_image_view)],
@@ -230,38 +231,23 @@ impl Renderer {
             StandardCommandBufferAllocatorCreateInfo::default(),
         ));
 
-        let command_buffers = swapchain_images
+        let compute_command_buffer = build_compute_command_buffer(
+            command_buffer_allocator.clone(),
+            compute_pipeline.clone(),
+            descriptor_set.clone(),
+            queue_family_index,
+            window_size,
+        );
+
+        let blit_command_buffers = swapchain_images
             .iter()
             .map(|image| {
-                let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+                build_blit_command_buffer(
                     command_buffer_allocator.clone(),
+                    output_image.clone(),
+                    image.clone(),
                     queue_family_index,
-                    CommandBufferUsage::MultipleSubmit,
                 )
-                .unwrap();
-
-                unsafe {
-                    command_buffer_builder
-                        .bind_pipeline_compute(compute_pipeline.clone())
-                        .unwrap()
-                        .bind_descriptor_sets(
-                            PipelineBindPoint::Compute,
-                            compute_pipeline.layout().clone(),
-                            0,
-                            set.clone(),
-                        )
-                        .unwrap()
-                        .dispatch([
-                            work_groups(window_size.width, 32),
-                            work_groups(window_size.height, 32),
-                            1,
-                        ])
-                        .unwrap()
-                        .blit_image(BlitImageInfo::images(output_image.clone(), image.clone()))
-                        .unwrap();
-                }
-
-                command_buffer_builder.build().unwrap()
             })
             .collect();
 
@@ -269,7 +255,8 @@ impl Renderer {
             device,
             queue,
             swapchain,
-            command_buffers,
+            compute_command_buffer,
+            blit_command_buffers,
         }
     }
 
@@ -281,9 +268,11 @@ impl Renderer {
 
         sync::now(self.device.clone())
             .join(acquire_future)
+            .then_execute(self.queue.clone(), self.compute_command_buffer.clone())
+            .unwrap()
             .then_execute(
                 self.queue.clone(),
-                self.command_buffers[image_index as usize].clone(),
+                self.blit_command_buffers[image_index as usize].clone(),
             )
             .unwrap()
             .then_swapchain_present(
@@ -299,6 +288,57 @@ impl Renderer {
     }
 }
 
-fn work_groups(data_length: u32, workgroup_size: u32) -> u32 {
-    (data_length as f32 / workgroup_size as f32).ceil() as u32
+fn build_compute_command_buffer(
+    allocator: Arc<StandardCommandBufferAllocator>,
+    pipeline: Arc<ComputePipeline>,
+    descriptor_set: Arc<DescriptorSet>,
+    queue_family_index: u32,
+    window_size: PhysicalSize<u32>,
+) -> Arc<PrimaryAutoCommandBuffer> {
+    let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+        allocator.clone(),
+        queue_family_index,
+        CommandBufferUsage::MultipleSubmit,
+    )
+    .unwrap();
+
+    const WORKGROUP_SIZE: u32 = 32;
+
+    let num_workgroups_x = (window_size.width as f32 / WORKGROUP_SIZE as f32).ceil() as u32;
+    let num_workgroups_y = (window_size.height as f32 / WORKGROUP_SIZE as f32).ceil() as u32;
+
+    command_buffer_builder
+        .bind_pipeline_compute(pipeline.clone())
+        .unwrap()
+        .bind_descriptor_sets(
+            PipelineBindPoint::Compute,
+            pipeline.layout().clone(),
+            0,
+            descriptor_set,
+        )
+        .unwrap();
+
+    unsafe { command_buffer_builder.dispatch([num_workgroups_x, num_workgroups_y, 1]) }.unwrap();
+
+    command_buffer_builder.build().unwrap()
+}
+
+fn build_blit_command_buffer(
+    allocator: Arc<StandardCommandBufferAllocator>,
+    computed_image: Arc<Image>,
+    swapchain_image: Arc<Image>,
+    queue_family_index: u32,
+) -> Arc<PrimaryAutoCommandBuffer> {
+    let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+        allocator.clone(),
+        queue_family_index,
+        CommandBufferUsage::MultipleSubmit,
+    )
+    .unwrap();
+
+    command_buffer_builder
+        .blit_image(BlitImageInfo::images(computed_image, swapchain_image))
+        .unwrap();
+
+    command_buffer_builder.build().unwrap()
 }
