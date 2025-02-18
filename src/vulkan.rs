@@ -38,22 +38,27 @@ pub struct Renderer {
     command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 }
 
-mod cs {
+mod compute {
     vulkano_shaders::shader! {
         ty: "compute",
-        src: /* glsl */ r"
-            #version 460
-
-            layout(local_size_x = 32, local_size_y = 32) in;
-            layout(binding = 0, location = 0, rgba32f) uniform image2D output_texture;
-
-            void main() {
-                imageStore(output_texture, ivec2(gl_GlobalInvocationID.xy), vec4(1.0, 0.0, 0.0, 1.0));
-            }
-        "
+        path: "assets/shaders/ray_tracing.comp",
     }
 }
 
+mod vertex {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "assets/shaders/quad.vert",
+    }
+}
+
+// mod fragment {
+//     vulkano_shaders::shader! {
+//         ty: "fragment",
+//         path: "assets/shaders/post_processing.frag",
+//     }
+// }
+//
 impl Renderer {
     pub fn new(window: Arc<Window>, event_loop: &ActiveEventLoop) -> Self {
         let library = VulkanLibrary::new().unwrap();
@@ -171,7 +176,7 @@ impl Renderer {
         )
         .unwrap();
 
-        let shader = cs::load(device.clone()).unwrap();
+        let shader = compute::load(device.clone()).unwrap();
         let stage = PipelineShaderStageCreateInfo::new(shader.entry_point("main").unwrap());
         let layout = PipelineLayout::new(
             device.clone(),
@@ -198,7 +203,7 @@ impl Renderer {
             memory_allocator.clone(),
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
-                format: Format::R32G32B32A32_SFLOAT,
+                format: Format::R8G8B8A8_UNORM,
                 extent: [window_size.width, window_size.height, 1],
                 usage: ImageUsage::STORAGE | ImageUsage::TRANSFER_SRC,
                 ..Default::default()
@@ -246,7 +251,11 @@ impl Renderer {
                             set.clone(),
                         )
                         .unwrap()
-                        .dispatch([window_size.width / 32, window_size.height / 32, 1])
+                        .dispatch([
+                            work_groups(window_size.width, 32),
+                            work_groups(window_size.height, 32),
+                            1,
+                        ])
                         .unwrap()
                         .blit_image(BlitImageInfo::images(output_image.clone(), image.clone()))
                         .unwrap();
@@ -288,4 +297,8 @@ impl Renderer {
 
         0
     }
+}
+
+fn work_groups(data_length: u32, workgroup_size: u32) -> u32 {
+    (data_length as f32 / workgroup_size as f32).ceil() as u32
 }
