@@ -4,8 +4,7 @@ use glam::Mat4;
 use vulkano::{
     command_buffer::{
         allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
-        AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, CopyImageInfo,
-        PrimaryAutoCommandBuffer,
+        AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, PrimaryAutoCommandBuffer,
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
@@ -14,7 +13,7 @@ use vulkano::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures,
         Queue, QueueCreateInfo, QueueFlags,
     },
-    format::Format,
+    format::{Format, NumericFormat},
     image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
     instance::{Instance, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
@@ -36,7 +35,6 @@ pub struct Renderer {
     device: Arc<Device>,
     queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
-    swapchain_images: Vec<Arc<Image>>,
     command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 }
 
@@ -47,7 +45,7 @@ mod cs {
             #version 460
 
             layout(local_size_x = 32, local_size_y = 32) in;
-            layout(binding = 0, location = 0, rgba8) uniform writeonly image2D output_texture;
+            layout(binding = 0, location = 0, rgba32f) uniform image2D output_texture;
 
             void main() {
                 imageStore(output_texture, ivec2(gl_GlobalInvocationID.xy), vec4(1.0, 0.0, 0.0, 1.0));
@@ -142,6 +140,18 @@ impl Renderer {
             .surface_capabilities(&surface, SurfaceInfo::default())
             .unwrap();
 
+        let surface_formats = device
+            .physical_device()
+            .surface_formats(&surface, SurfaceInfo::default())
+            .unwrap();
+
+        let (surface_format, _) = surface_formats
+            .iter()
+            .find(|(format, _)| format.numeric_format_color() == Some(NumericFormat::SRGB))
+            .unwrap();
+
+        log::info!("Using surface format: {surface_format:?}");
+
         let (swapchain, swapchain_images) = Swapchain::new(
             device.clone(),
             surface,
@@ -149,7 +159,7 @@ impl Renderer {
                 min_image_count: surface_capabilities.min_image_count.max(2),
                 image_extent: window_size.into(),
                 image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSFER_DST,
-                image_format: Format::R8G8B8A8_UNORM,
+                image_format: *surface_format,
                 present_mode: PresentMode::Immediate,
                 composite_alpha: surface_capabilities
                     .supported_composite_alpha
@@ -188,7 +198,7 @@ impl Renderer {
             memory_allocator.clone(),
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
-                format: Format::R8G8B8A8_UNORM,
+                format: Format::R32G32B32A32_SFLOAT,
                 extent: [window_size.width, window_size.height, 1],
                 usage: ImageUsage::STORAGE | ImageUsage::TRANSFER_SRC,
                 ..Default::default()
@@ -201,7 +211,7 @@ impl Renderer {
         .unwrap();
         let output_image_view = ImageView::new_default(output_image.clone()).unwrap();
 
-        let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+        let layout = compute_pipeline.layout().set_layouts().first().unwrap();
         let set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
             layout.clone(),
@@ -238,7 +248,7 @@ impl Renderer {
                         .unwrap()
                         .dispatch([window_size.width / 32, window_size.height / 32, 1])
                         .unwrap()
-                        .copy_image(CopyImageInfo::images(output_image.clone(), image.clone()))
+                        .blit_image(BlitImageInfo::images(output_image.clone(), image.clone()))
                         .unwrap();
                 }
 
@@ -250,14 +260,13 @@ impl Renderer {
             device,
             queue,
             swapchain,
-            swapchain_images,
             command_buffers,
         }
     }
 
-    pub fn update_camera(&mut self, view: &Mat4, projection: &Mat4) {}
+    pub fn update_camera(&mut self, _view: &Mat4, _projection: &Mat4) {}
 
-    pub fn render(&mut self, time: f32) -> u32 {
+    pub fn render(&mut self, _time: f32) -> u32 {
         let (image_index, _suboptimal, acquire_future) =
             swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
 

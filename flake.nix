@@ -23,6 +23,7 @@
               targets = [ "x86_64-unknown-linux-gnu" "x86_64-pc-windows-gnu" ];
             })
             pkgsCross.mingwW64.buildPackages.gcc
+            vulkan-tools
           ];
           buildInputs = with pkgs; [
             vulkan-loader
